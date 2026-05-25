@@ -13,7 +13,9 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: devpilot-ai-db
+          property: connectionString
       - key: SESSION_SECRET
         generateValue: true
       - key: AUTH_SESSION_TTL_SECONDS
@@ -37,7 +39,7 @@ services:
       - key: GITHUB_TOKEN
         sync: false
       - key: GITHUB_REPOSITORY
-        sync: false
+        value: pavansai20052004-hue/DEVPILOT-AI
       - key: GITHUB_BASE_BRANCH
         value: main
       - key: DEVPILOT_MAX_REQUEST_BODY_BYTES
@@ -56,5 +58,10 @@ services:
         value: "false"
       - key: AUTONOMOUS_AGENT_REQUIRE_APPROVAL
         value: "true"
+databases:
+  - name: devpilot-ai-db
+    databaseName: devpilot
+    user: devpilot
+    plan: free
 previews:
   generation: none
