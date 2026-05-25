@@ -63,5 +63,4 @@ databases:
     databaseName: devpilot
     user: devpilot
     plan: free
-previews:
-  generation: none
+
