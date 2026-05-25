@@ -1,0 +1,60 @@
+services:
+  - type: web
+    name: devpilot-ai-api
+    runtime: docker
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /ready
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: AUTH_SESSION_TTL_SECONDS
+        value: "2592000"
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: FRONTEND_ORIGIN_REGEX
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.4-mini
+      - key: OPENAI_BASE_MODEL
+        value: gpt-5.4-mini
+      - key: OPENAI_FINE_TUNED_MODEL
+        sync: false
+      - key: DEVPILOT_CUSTOM_MODEL
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPOSITORY
+        sync: false
+      - key: GITHUB_BASE_BRANCH
+        value: main
+      - key: DEVPILOT_MAX_REQUEST_BODY_BYTES
+        value: "1500000"
+      - key: DEVPILOT_RATE_LIMIT_WINDOW_SECONDS
+        value: "60"
+      - key: DEVPILOT_RATE_LIMIT_REQUESTS_PER_WINDOW
+        value: "120"
+      - key: AUTONOMOUS_AGENT_ENABLED
+        value: "true"
+      - key: AUTONOMOUS_AGENT_INTERVAL_SECONDS
+        value: "15"
+      - key: AUTONOMOUS_AGENT_MODE
+        value: simulation
+      - key: AUTONOMOUS_AGENT_APPLY_KUBERNETES
+        value: "false"
+      - key: AUTONOMOUS_AGENT_REQUIRE_APPROVAL
+        value: "true"
+previews:
+  generation: none
