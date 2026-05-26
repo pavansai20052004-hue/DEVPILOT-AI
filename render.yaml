@@ -13,17 +13,16 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: DATABASE_URL
-        fromDatabase:
-          name: devpilot-ai-db
-          property: connectionString
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: AUTH_SESSION_TTL_SECONDS
         value: "2592000"
+      # Add exact custom frontend origins here if you do not use the default platform domains.
       - key: FRONTEND_ORIGINS
         sync: false
       - key: FRONTEND_ORIGIN_REGEX
-        sync: false
+        value: "^https://[a-z0-9.-]+\\.(?:vercel|netlify)\\.app$"
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
@@ -35,6 +34,8 @@ services:
       - key: DEVPILOT_CUSTOM_MODEL
         sync: false
       - key: SLACK_WEBHOOK_URL
+        sync: false
+      - key: KUBECONFIG
         sync: false
       - key: GITHUB_TOKEN
         sync: false
@@ -58,9 +59,4 @@ services:
         value: "false"
       - key: AUTONOMOUS_AGENT_REQUIRE_APPROVAL
         value: "true"
-databases:
-  - name: devpilot-ai-db
-    databaseName: devpilot
-    user: devpilot
-    plan: free
 

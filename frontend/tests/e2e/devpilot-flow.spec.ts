@@ -52,6 +52,13 @@ async function authenticateFirstOwner(page: Page) {
     await page.getByPlaceholder("Password").fill(adminPassword);
     await page.getByPlaceholder("Team name").fill("DevPilot E2E");
     await createWorkspaceButton.click();
+    if (!(await isVisible(page.getByRole("heading", { name: "Incident Dashboard" }), 5_000))) {
+      await page.goto("/dashboard");
+      await expect(signInButton).toBeVisible();
+      await page.getByPlaceholder("Email").fill(adminEmail);
+      await page.getByPlaceholder("Password").fill(adminPassword);
+      await signInButton.click();
+    }
   } else {
     await expect(signInButton).toBeVisible();
     await page.getByPlaceholder("Email").fill(adminEmail);

@@ -115,6 +115,7 @@ PUBLIC_PATHS = {
 RATE_LIMIT_STATE: dict[str, deque[float]] = {}
 RATE_LIMIT_STATE_LOCK = threading.RLock()
 INCIDENT_DB_INIT_LOCK = threading.RLock()
+AUTH_BOOTSTRAP_LOCK = threading.RLock()
 INCIDENT_DB_INITIALIZED = False
 DATABASE_URL_ENV = "DATABASE_URL"
 SESSION_SECRET_ENV = "SESSION_SECRET"
@@ -666,41 +667,42 @@ def auth_bootstrap(
     request: Request,
     response: Response,
 ) -> AuthSessionResponse:
-    if has_any_auth_users():
-        raise HTTPException(
-            status_code=409,
-            detail="DevPilot has already been bootstrapped. Use sign in instead.",
+    with AUTH_BOOTSTRAP_LOCK:
+        if has_any_auth_users():
+            raise HTTPException(
+                status_code=409,
+                detail="DevPilot has already been bootstrapped. Use sign in instead.",
+            )
+
+        email = normalize_owner_email(payload.email)
+        user_row = create_auth_user_if_missing(
+            email=email,
+            password=payload.password,
+            full_name=payload.full_name,
+        )
+        team = create_saas_team(
+            TeamCreateRequest(
+                name=payload.team_name,
+                owner_email=email,
+                plan_id="free",
+            ),
+        )
+        touch_auth_user_login(str(user_row["id"]), datetime.now(UTC).isoformat())
+        _, session_token, csrf_token = create_auth_session_record(
+            user_id=str(user_row["id"]),
+            team_id=team.id,
+            request=request,
         )
 
-    email = normalize_owner_email(payload.email)
-    user_row = create_auth_user_if_missing(
-        email=email,
-        password=payload.password,
-        full_name=payload.full_name,
-    )
-    team = create_saas_team(
-        TeamCreateRequest(
-            name=payload.team_name,
-            owner_email=email,
-            plan_id="free",
-        ),
-    )
-    touch_auth_user_login(str(user_row["id"]), datetime.now(UTC).isoformat())
-    session_row, session_token, csrf_token = create_auth_session_record(
-        user_id=str(user_row["id"]),
-        team_id=team.id,
-        request=request,
-    )
-
-    session_response = build_auth_session_response(
-        authenticated=True,
-        user_row=user_row,
-        team_row=model_to_dict(team),
-        team_rows=auth_user_team_rows(email),
-        csrf_token=csrf_token,
-    )
-    set_auth_cookies(response, session_token, csrf_token)
-    return session_response
+        session_response = build_auth_session_response(
+            authenticated=True,
+            user_row=user_row,
+            team_row=model_to_dict(team),
+            team_rows=auth_user_team_rows(email),
+            csrf_token=csrf_token,
+        )
+        set_auth_cookies(response, session_token, csrf_token)
+        return session_response
 
 
 @app.post("/auth/login", response_model=AuthSessionResponse)
@@ -2410,6 +2412,10 @@ def current_user_role() -> UserRole:
     return CURRENT_USER_ROLE.get()
 
 
+def current_session_id() -> str | None:
+    return CURRENT_SESSION_ID.get()
+
+
 def current_authentication_status() -> bool:
     return CURRENT_AUTHENTICATED.get()
 
@@ -3438,6 +3444,7 @@ def create_auth_user_if_missing(
                 last_login_at, is_active
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(email) DO NOTHING
             """,
             (
                 user_id,
@@ -10827,11 +10834,6 @@ def ask_voice_assistant(payload: VoiceAssistantRequest) -> VoiceAssistantRespons
         return answer_voice_question_with_openai(question)
 
     return fallback_voice_assistant_answer(question)
-
-
-@app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
 
 
 @app.get("/plugins/marketplace", response_model=PluginMarketplaceResponse)

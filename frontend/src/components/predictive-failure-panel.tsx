@@ -310,8 +310,8 @@ export function PredictiveFailurePanel() {
                   Recommended Actions
                 </p>
                 <ul className="grid gap-2 text-sm leading-6 text-zinc-300">
-                  {prediction.recommended_actions.map((action) => (
-                    <li key={action} className="flex gap-2">
+                  {prediction.recommended_actions.map((action, index) => (
+                    <li key={`${index}:${action}`} className="flex gap-2">
                       <span className="mt-2 size-1.5 shrink-0 rounded-full bg-lime-200" />
                       <span>{action}</span>
                     </li>

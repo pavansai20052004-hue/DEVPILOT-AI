@@ -510,9 +510,9 @@ export function VoiceAssistantPanel() {
                 Narrate Incident
               </button>
               <div className="flex flex-wrap gap-2">
-                {narratorBriefing.stats.map((item) => (
+                {narratorBriefing.stats.map((item, index) => (
                   <span
-                    key={item}
+                    key={`${index}:${item}`}
                     className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-300"
                   >
                     {item}
@@ -642,9 +642,9 @@ export function VoiceAssistantPanel() {
 
               {response.evidence.length ? (
                 <div className="mt-4 grid gap-2">
-                  {response.evidence.map((item) => (
+                  {response.evidence.map((item, index) => (
                     <div
-                      key={item}
+                      key={`${index}:${item}`}
                       className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs leading-5 text-zinc-400"
                     >
                       {item}

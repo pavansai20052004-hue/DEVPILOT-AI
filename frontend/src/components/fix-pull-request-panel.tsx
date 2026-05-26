@@ -554,9 +554,9 @@ export function FixPullRequestPanel() {
                   Deployment Suggestions
                 </p>
                 <div className="mt-3 grid gap-2">
-                  {generatedFiles.deployment_suggestions.map((suggestion) => (
+                  {generatedFiles.deployment_suggestions.map((suggestion, index) => (
                     <div
-                      key={suggestion}
+                      key={`${index}:${suggestion}`}
                       className="flex items-start gap-2 text-sm leading-6 text-zinc-300"
                     >
                       <CheckCircle2

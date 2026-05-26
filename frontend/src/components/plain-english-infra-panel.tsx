@@ -205,9 +205,9 @@ export function PlainEnglishInfraPanel() {
           </label>
 
           <div className="flex flex-wrap gap-2">
-            {examples.map((example) => (
+            {examples.map((example, index) => (
               <button
-                key={example}
+                key={`${index}:${example}`}
                 type="button"
                 onClick={() => {
                   setCommand(example);
@@ -379,9 +379,9 @@ export function PlainEnglishInfraPanel() {
                   </p>
                   {action.pod_names.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {action.pod_names.map((podName) => (
+                      {action.pod_names.map((podName, index) => (
                         <span
-                          key={podName}
+                          key={`${index}:${podName}`}
                           className="rounded-md border border-white/10 bg-white/5 px-2 py-1 font-mono text-xs text-zinc-300"
                         >
                           {podName}

@@ -558,8 +558,8 @@ export function KubernetesClusterPanel() {
                           </div>
                           {pod.reasons.length ? (
                             <div className="mt-3 grid gap-1 text-sm leading-6">
-                              {pod.reasons.map((reason) => (
-                                <p key={reason}>{reason}</p>
+                              {pod.reasons.map((reason, index) => (
+                                <p key={`${index}:${reason}`}>{reason}</p>
                               ))}
                             </div>
                           ) : null}
