@@ -48,11 +48,13 @@ def isolated_backend_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         monkeypatch.delenv(secret_name, raising=False)
 
     main.AUTONOMOUS_AGENT_CONFIG["enabled"] = False
+    main.INCIDENT_DB_INITIALIZED = False
     main.RATE_LIMIT_STATE.clear()
     main.clear_incident_history_cache()
 
     yield
 
+    main.INCIDENT_DB_INITIALIZED = False
     main.RATE_LIMIT_STATE.clear()
     main.clear_incident_history_cache()
 

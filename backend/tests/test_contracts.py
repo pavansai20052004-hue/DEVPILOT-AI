@@ -29,6 +29,11 @@ def bootstrap_admin(client: TestClient) -> tuple[dict[str, Any], dict[str, str]]
 
 
 def test_health_and_readiness_contracts(client: TestClient) -> None:
+    root_response = client.get("/")
+    assert root_response.status_code == 200
+    assert root_response.json()["status"] == "ok"
+    assert root_response.json()["health"] == "/health"
+
     health_response = client.get("/health")
     assert health_response.status_code == 200
     assert health_response.json() == {

@@ -257,6 +257,18 @@ def health_check() -> dict[str, str]:
     }
 
 
+@app.get("/")
+def root_check() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "service": "devpilot-ai-api",
+        "version": app.version,
+        "health": "/health",
+        "readiness": "/ready",
+        "docs": "/docs",
+    }
+
+
 @app.get("/ready")
 def ready_check() -> dict[str, str]:
     try:
@@ -4190,43 +4202,59 @@ def ensure_sqlite_column(
         )
 
 
+def lock_storage_initialization(connection: StorageConnectionProxy) -> None:
+    if using_postgres_storage():
+        connection.execute("SELECT pg_advisory_xact_lock(424242501)")
+
+
 def init_incident_db() -> None:
-    with open_storage_connection() as connection:
-        _initialize_storage_schema(connection)
-        seeded_at = datetime.now(UTC).isoformat()
-        connection.execute(
-            """
-            INSERT INTO saas_teams (
-                id, name, plan_id, owner_email, created_at, updated_at
+    global INCIDENT_DB_INITIALIZED
+    if INCIDENT_DB_INITIALIZED:
+        return
+
+    with INCIDENT_DB_INIT_LOCK:
+        if INCIDENT_DB_INITIALIZED:
+            return
+
+        with open_storage_connection() as connection:
+            lock_storage_initialization(connection)
+            _initialize_storage_schema(connection)
+            seeded_at = datetime.now(UTC).isoformat()
+            connection.execute(
+                """
+                INSERT INTO saas_teams (
+                    id, name, plan_id, owner_email, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO NOTHING
+                """,
+                (
+                    DEFAULT_SAAS_TEAM_ID,
+                    "DevPilot Demo Team",
+                    "pro",
+                    DEFAULT_SAAS_OWNER_EMAIL,
+                    seeded_at,
+                    seeded_at,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO NOTHING
-            """,
-            (
-                DEFAULT_SAAS_TEAM_ID,
-                "DevPilot Demo Team",
-                "pro",
-                DEFAULT_SAAS_OWNER_EMAIL,
-                seeded_at,
-                seeded_at,
-            ),
-        )
-        connection.execute(
-            """
-            INSERT INTO saas_team_members (
-                id, team_id, email, role, created_at
+            connection.execute(
+                """
+                INSERT INTO saas_team_members (
+                    id, team_id, email, role, created_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(team_id, email) DO NOTHING
+                """,
+                (
+                    "member_default_owner",
+                    DEFAULT_SAAS_TEAM_ID,
+                    DEFAULT_SAAS_OWNER_EMAIL,
+                    "owner",
+                    seeded_at,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(team_id, email) DO NOTHING
-            """,
-            (
-                "member_default_owner",
-                DEFAULT_SAAS_TEAM_ID,
-                DEFAULT_SAAS_OWNER_EMAIL,
-                "owner",
-                seeded_at,
-            ),
-        )
+
+        INCIDENT_DB_INITIALIZED = True
 
 
 def incident_db_connection() -> StorageConnectionProxy:
