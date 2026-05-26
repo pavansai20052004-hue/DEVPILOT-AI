@@ -29,3 +29,5 @@ frontend/next-env.d.ts
 frontend/playwright-report/
 frontend/.vercel/
 frontend/.git-backup*/
+
+.vercel
