@@ -1,3 +1,8 @@
+import nextEnv from "@next/env";
+
+const { loadEnvConfig } = nextEnv;
+loadEnvConfig(process.cwd(), false);
+
 const apiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 const liveTwin = process.env.NEXT_PUBLIC_ENABLE_LIVE_K8S_TWIN?.trim();
 const isVercelBuild = Boolean(process.env.VERCEL_ENV);

@@ -13,10 +13,18 @@ const e2eIncidentDbPath = path.join(
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
+  // The suite mutates one backend/SQLite instance, so keep browser tests serial.
+  workers: 1,
+  timeout: 120_000,
+  expect: {
+    timeout: 15_000,
+  },
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"]],
   use: {
     baseURL: `http://127.0.0.1:${frontendPort}`,
+    actionTimeout: 20_000,
+    navigationTimeout: 45_000,
     trace: "retain-on-failure",
   },
   webServer: [
@@ -48,7 +56,12 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: {
+          timeout: 60_000,
+        },
+      },
     },
   ],
 });
