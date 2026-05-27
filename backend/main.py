@@ -35,8 +35,8 @@ from kubernetes.config.config_exception import ConfigException
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 from psycopg import Connection as PostgresConnection
-from psycopg import connect as pg_connect
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 
 def is_production_environment() -> bool:
@@ -96,6 +96,7 @@ RATE_LIMIT_EXEMPT_PATHS = {
     "/",
     "/health",
     "/ready",
+    "/auth/session",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -114,6 +115,8 @@ PUBLIC_PATHS = {
 }
 RATE_LIMIT_STATE: dict[str, deque[float]] = {}
 RATE_LIMIT_STATE_LOCK = threading.RLock()
+POSTGRES_POOL_LOCK = threading.RLock()
+POSTGRES_POOL: ConnectionPool | None = None
 INCIDENT_DB_INIT_LOCK = threading.RLock()
 AUTH_BOOTSTRAP_LOCK = threading.RLock()
 INCIDENT_DB_INITIALIZED = False
@@ -174,6 +177,40 @@ def get_cors_origin_regex() -> str | None:
         raise RuntimeError("FRONTEND_ORIGIN_REGEX is not a valid regular expression.") from exc
 
     return origin_regex
+
+
+def is_allowed_cors_origin(origin: str) -> bool:
+    normalized_origin = normalize_frontend_origin(origin)
+    if normalized_origin is None:
+        return False
+
+    if normalized_origin in get_cors_origins():
+        return True
+
+    origin_regex = get_cors_origin_regex()
+    return bool(origin_regex and re.fullmatch(origin_regex, normalized_origin))
+
+
+def vary_header_with_origin(response: Response) -> None:
+    existing_vary = response.headers.get("Vary")
+    if not existing_vary:
+        response.headers["Vary"] = "Origin"
+        return
+
+    vary_values = {value.strip().lower() for value in existing_vary.split(",")}
+    if "origin" not in vary_values:
+        response.headers["Vary"] = f"{existing_vary}, Origin"
+
+
+def with_cors_headers(request: Request, response: Response) -> Response:
+    origin = request.headers.get("origin", "").strip()
+    if not origin or not is_allowed_cors_origin(origin):
+        return response
+
+    response.headers["Access-Control-Allow-Origin"] = normalize_frontend_origin(origin) or origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    vary_header_with_origin(response)
+    return response
 
 
 def validate_cors_configuration() -> None:
@@ -429,20 +466,26 @@ async def team_context_and_usage_middleware(request: Request, call_next: Any) ->
         auth_context = resolve_request_auth_context(request)
         team_id = auth_context.team_id
     except HTTPException as exc:
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return with_cors_headers(
+            request,
+            JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}),
+        )
 
     token = auth_context.apply_context()
     metrics = metered_usage_metrics(request.url.path, request.method)
 
     try:
         if request_body_size_too_large(request):
-            return JSONResponse(
-                status_code=413,
-                content={
-                    "detail": (
-                        "Request body is too large. Trim the payload and try again."
-                    ),
-                },
+            return with_cors_headers(
+                request,
+                JSONResponse(
+                    status_code=413,
+                    content={
+                        "detail": (
+                            "Request body is too large. Trim the payload and try again."
+                        ),
+                    },
+                ),
             )
 
         skip_metering = request.url.path in RATE_LIMIT_EXEMPT_PATHS
@@ -450,11 +493,11 @@ async def team_context_and_usage_middleware(request: Request, call_next: Any) ->
         if not skip_metering:
             rate_limit_error = enforce_request_rate_limit(request, team_id)
             if rate_limit_error:
-                return rate_limit_error
+                return with_cors_headers(request, rate_limit_error)
 
             quota_error = quota_error_for_request(team_id, metrics)
             if quota_error:
-                return quota_error
+                return with_cors_headers(request, quota_error)
 
         if (
             request.method in {"POST", "PUT", "PATCH", "DELETE"}
@@ -462,7 +505,7 @@ async def team_context_and_usage_middleware(request: Request, call_next: Any) ->
         ):
             csrf_error = enforce_csrf_protection(request, auth_context)
             if csrf_error:
-                return csrf_error
+                return with_cors_headers(request, csrf_error)
 
         response = await call_next(request)
 
@@ -481,14 +524,17 @@ async def team_context_and_usage_middleware(request: Request, call_next: Any) ->
                 getattr(request.state, "rate_limit_reset_at", None),
             ),
         )
-        return response
+        return with_cors_headers(request, response)
     except HTTPException as exc:
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return with_cors_headers(
+            request,
+            JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}),
+        )
     except Exception:
         logger.exception(
             "Unhandled backend error on %s %s", request.method, request.url.path
         )
-        return friendly_internal_error_response()
+        return with_cors_headers(request, friendly_internal_error_response())
     finally:
         auth_context.reset_context(token)
 
@@ -2940,15 +2986,18 @@ def build_auth_session_response(
 
 
 class StorageConnectionProxy:
-    def __init__(self, connection: sqlite3.Connection | PostgresConnection):
-        self._connection = connection
+    def __init__(self, connection: Any):
+        self._connection_context = connection
+        self._connection: sqlite3.Connection | PostgresConnection = connection
 
     def __enter__(self) -> "StorageConnectionProxy":
-        self._connection.__enter__()
+        entered_connection = self._connection_context.__enter__()
+        if entered_connection is not None:
+            self._connection = entered_connection
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Any:
-        return self._connection.__exit__(exc_type, exc, tb)
+        return self._connection_context.__exit__(exc_type, exc, tb)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._connection, name)
@@ -2964,15 +3013,52 @@ class StorageConnectionProxy:
         return self._connection.execute(sql, params)
 
 
+def postgres_pool_min_size() -> int:
+    configured = os.getenv("POSTGRES_POOL_MIN_SIZE", "1").strip()
+    try:
+        return max(1, int(configured))
+    except ValueError:
+        return 1
+
+
+def postgres_pool_max_size() -> int:
+    configured = os.getenv("POSTGRES_POOL_MAX_SIZE", "4").strip()
+    try:
+        return max(postgres_pool_min_size(), int(configured))
+    except ValueError:
+        return max(postgres_pool_min_size(), 4)
+
+
+def postgres_connection_pool() -> ConnectionPool:
+    global POSTGRES_POOL
+    with POSTGRES_POOL_LOCK:
+        if POSTGRES_POOL is None or POSTGRES_POOL.closed:
+            POSTGRES_POOL = ConnectionPool(
+                conninfo=database_url(),
+                kwargs={
+                    "row_factory": dict_row,
+                    "connect_timeout": 10,
+                },
+                min_size=postgres_pool_min_size(),
+                max_size=postgres_pool_max_size(),
+                open=False,
+            )
+            POSTGRES_POOL.open()
+
+        return POSTGRES_POOL
+
+
+def close_postgres_connection_pool() -> None:
+    global POSTGRES_POOL
+    with POSTGRES_POOL_LOCK:
+        if POSTGRES_POOL is not None and not POSTGRES_POOL.closed:
+            POSTGRES_POOL.close()
+        POSTGRES_POOL = None
+
+
 def open_storage_connection() -> StorageConnectionProxy:
     if using_postgres_storage():
-        return StorageConnectionProxy(
-            pg_connect(
-                database_url(),
-                row_factory=dict_row,
-                connect_timeout=10,
-            ),
-        )
+        return StorageConnectionProxy(postgres_connection_pool().connection())
 
     path = incident_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -10726,6 +10812,7 @@ def start_autonomous_agent_on_startup() -> None:
 @app.on_event("shutdown")
 def stop_autonomous_agent_on_shutdown() -> None:
     stop_autonomous_agent_thread()
+    close_postgres_connection_pool()
 
 
 @app.get("/agent/status", response_model=AutonomousAgentStatusResponse)
