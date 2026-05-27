@@ -2,6 +2,11 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const adminEmail = "admin@example.com";
 const adminPassword = "CorrectHorseBatteryStaple!";
+const liveRun = process.env.PLAYWRIGHT_LIVE === "true";
+const expectTimeout = liveRun ? 60_000 : 15_000;
+const authChoiceTimeout = liveRun ? 30_000 : 10_000;
+const shortAuthTimeout = liveRun ? 30_000 : 5_000;
+const responseTimeout = liveRun ? 60_000 : 20_000;
 const sampleLog = [
   "2026-05-25T08:12:10Z production api ERROR DATABASE_URL is not configured",
   "2026-05-25T08:12:12Z production api FATAL database connection string missing",
@@ -30,6 +35,8 @@ const appRoutes = [
   { href: "/demo", label: "Demo Mode" },
 ];
 
+test.describe.configure({ timeout: liveRun ? 420_000 : 120_000 });
+
 async function isVisible(locator: Locator, timeout = 2_000) {
   try {
     await expect(locator).toBeVisible({ timeout });
@@ -49,13 +56,13 @@ async function authenticateFirstOwner(page: Page) {
   });
   const signInButton = page.getByRole("button", { name: /^sign in$/i });
 
-  if (await isVisible(createWorkspaceButton, 10_000)) {
+  if (await isVisible(createWorkspaceButton, authChoiceTimeout)) {
     await page.getByPlaceholder("Full name").fill("E2E Admin");
     await page.getByPlaceholder("Email").fill(uniqueEmail);
     await page.getByPlaceholder("Password").fill(adminPassword);
     await page.getByPlaceholder("Team name").fill(uniqueTeamName);
     await createWorkspaceButton.click();
-    if (!(await isVisible(page.getByRole("heading", { name: "Incident Dashboard" }), 5_000))) {
+    if (!(await isVisible(page.getByRole("heading", { name: "Incident Dashboard" }), shortAuthTimeout))) {
       await page.goto("/dashboard");
       await expect(signInButton).toBeVisible();
       await page.getByPlaceholder("Email").fill(uniqueEmail);
@@ -71,7 +78,7 @@ async function authenticateFirstOwner(page: Page) {
 
   await expect(
     page.getByRole("heading", { name: "Incident Dashboard" }),
-  ).toBeVisible({ timeout: 15_000 });
+  ).toBeVisible({ timeout: expectTimeout });
 }
 
 async function expectRouteHeading(page: Page, label: string) {
@@ -85,7 +92,7 @@ async function expectRouteHeading(page: Page, label: string) {
 }
 
 async function clickEnabled(locator: Locator) {
-  await expect(locator).toBeEnabled({ timeout: 15_000 });
+  await expect(locator).toBeEnabled({ timeout: expectTimeout });
   await locator.click();
 }
 
@@ -100,7 +107,7 @@ async function runDemo(page: Page) {
   }
   await expect(
     page.locator("#demo-mode").getByRole("button", { name: /demo loaded/i }),
-  ).toBeVisible({ timeout: 15_000 });
+  ).toBeVisible({ timeout: expectTimeout });
 }
 
 async function mockPullRequestCreation(page: Page) {
@@ -204,7 +211,7 @@ test("operate buttons stay within safe local workflows", async ({ page }) => {
   await page.goto("/dashboard");
   await expectRouteHeading(page, "Incident Dashboard");
   const downloadButton = page.getByRole("button", { name: /download pdf/i });
-  await expect(downloadButton).toBeEnabled({ timeout: 15_000 });
+  await expect(downloadButton).toBeEnabled({ timeout: expectTimeout });
   const downloadPromise = page.waitForEvent("download");
   await downloadButton.click();
   const download = await downloadPromise;
@@ -244,7 +251,7 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await clickEnabled(page.getByRole("button", { name: /run collaboration/i }));
   const rejectButtonLocator = page.getByRole("button", { name: /^reject$/i });
   await expect(rejectButtonLocator.first()).toBeVisible({
-    timeout: 15_000,
+    timeout: expectTimeout,
   });
   const rejectReviewResponse = page.waitForResponse((response) => {
     return (
@@ -252,7 +259,7 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
       /\/agent\/approvals\/[^/]+\/review$/.test(response.url()) &&
       response.status() === 200
     );
-  });
+  }, { timeout: responseTimeout });
   await clickEnabled(rejectButtonLocator.first());
   await rejectReviewResponse;
 
@@ -261,7 +268,7 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
     await clickEnabled(page.getByRole("button", { name: /run collaboration/i }));
     approveButtonLocator = page.getByRole("button", { name: /^approve$/i });
     await expect(approveButtonLocator.first()).toBeVisible({
-      timeout: 15_000,
+      timeout: expectTimeout,
     });
   }
 
@@ -271,7 +278,7 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
       /\/agent\/approvals\/[^/]+\/review$/.test(response.url()) &&
       response.status() === 200
     );
-  });
+  }, { timeout: responseTimeout });
   await clickEnabled(approveButtonLocator.first());
   await approveReviewResponse;
 
@@ -283,7 +290,7 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await page.goto("/model-training");
   await expectRouteHeading(page, "Model Training");
   await clickEnabled(page.getByRole("button", { name: /train model/i }));
-  await expect(page.getByText(/custom score/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/custom score/i)).toBeVisible({ timeout: expectTimeout });
 
   await page.goto("/terraform");
   await expectRouteHeading(page, "Terraform");
@@ -296,10 +303,10 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await expectRouteHeading(page, "Fix Pull Request");
   await page.getByLabel("Repository").fill("demo/devpilot-ai");
   await clickEnabled(page.getByRole("button", { name: /generate files/i }));
-  await expect(page.getByText("Generated Files")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Generated Files")).toBeVisible({ timeout: expectTimeout });
   await clickEnabled(page.getByRole("button", { name: /create pr/i }));
   await expect(page.getByText(/pull request opened in demo\/devpilot-ai\./i)).toBeVisible({
-    timeout: 15_000,
+    timeout: expectTimeout,
   });
 
   await page.goto("/infra-command");
@@ -311,7 +318,7 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await page.goto("/chaos");
   await expectRouteHeading(page, "Chaos Engineering");
   await clickEnabled(page.getByRole("button", { name: /inject failure/i }));
-  await expect(page.getByText(/auto-heal executed/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/auto-heal executed/i)).toBeVisible({ timeout: expectTimeout });
 });
 
 test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
@@ -325,7 +332,7 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
   await clickEnabled(page.getByRole("button", { name: /^create team$/i }));
   await expect(
     page.getByText("Active Team").locator("xpath=ancestor::div[2]").getByText(matrixTeamName),
-  ).toBeVisible({ timeout: 15_000 });
+  ).toBeVisible({ timeout: expectTimeout });
   await clickEnabled(page.getByRole("button", { name: /^select plan$/i }).first());
   await expect(page.getByText(/^Pro$/).first()).toBeVisible();
   await page.getByPlaceholder("Email").fill(`matrix-${Date.now()}@example.com`);
@@ -346,11 +353,11 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
   await expectRouteHeading(page, "Plugins");
   await clickEnabled(page.getByRole("button", { name: /^install$/i }).first());
   await expect(page.getByRole("button", { name: /^update$/i }).first()).toBeVisible({
-    timeout: 15_000,
+    timeout: expectTimeout,
   });
   await clickEnabled(page.getByRole("button", { name: /^remove$/i }).first());
   await expect(page.getByRole("button", { name: /^install$/i }).first()).toBeVisible({
-    timeout: 15_000,
+    timeout: expectTimeout,
   });
 
   await page.goto("/demo");
@@ -358,9 +365,9 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
   await clickEnabled(page.locator("#demo-mode").getByRole("button", { name: /run demo/i }));
   await expect(
     page.locator("#demo-mode").getByRole("button", { name: /demo loaded/i }),
-  ).toBeVisible({ timeout: 15_000 });
+  ).toBeVisible({ timeout: expectTimeout });
   await clickEnabled(page.locator("#judge-mode").getByRole("button", { name: /judge mode/i }));
-  await expect(page.getByText(/elapsed/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/elapsed/i)).toBeVisible({ timeout: expectTimeout });
 
   await page.goto("/voice");
   await expectRouteHeading(page, "Voice Assistant");
@@ -369,6 +376,6 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
   await page.getByRole("button", { name: /^stop$/i }).click();
   await page.getByLabel("Question").fill("Why did deployment fail?");
   await clickEnabled(page.getByRole("button", { name: /ask devpilot/i }));
-  await expect(page.getByText(/deployment/i).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/deployment/i).first()).toBeVisible({ timeout: expectTimeout });
   await clickEnabled(page.getByRole("button", { name: /replay|stop voice/i }));
 });

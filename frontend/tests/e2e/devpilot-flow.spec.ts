@@ -2,6 +2,10 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const adminEmail = "admin@example.com";
 const adminPassword = "CorrectHorseBatteryStaple!";
+const liveRun = process.env.PLAYWRIGHT_LIVE === "true";
+const expectTimeout = liveRun ? 60_000 : 15_000;
+const authChoiceTimeout = liveRun ? 30_000 : 10_000;
+const shortAuthTimeout = liveRun ? 30_000 : 5_000;
 const sampleLog = [
   "2026-05-25T08:12:10Z production api ERROR DATABASE_URL is not configured",
   "2026-05-25T08:12:12Z production api FATAL database connection string missing",
@@ -29,6 +33,8 @@ const appRoutes = [
   { href: "/demo", label: "Demo Mode" },
 ];
 
+test.describe.configure({ timeout: liveRun ? 420_000 : 120_000 });
+
 async function isVisible(locator: Locator, timeout = 2_000) {
   try {
     await expect(locator).toBeVisible({ timeout });
@@ -46,13 +52,13 @@ async function authenticateFirstOwner(page: Page) {
   });
   const signInButton = page.getByRole("button", { name: /^sign in$/i });
 
-  if (await isVisible(createWorkspaceButton, 10_000)) {
+  if (await isVisible(createWorkspaceButton, authChoiceTimeout)) {
     await page.getByPlaceholder("Full name").fill("E2E Admin");
     await page.getByPlaceholder("Email").fill(adminEmail);
     await page.getByPlaceholder("Password").fill(adminPassword);
     await page.getByPlaceholder("Team name").fill("DevPilot E2E");
     await createWorkspaceButton.click();
-    if (!(await isVisible(page.getByRole("heading", { name: "Incident Dashboard" }), 5_000))) {
+    if (!(await isVisible(page.getByRole("heading", { name: "Incident Dashboard" }), shortAuthTimeout))) {
       await page.goto("/dashboard");
       await expect(signInButton).toBeVisible();
       await page.getByPlaceholder("Email").fill(adminEmail);
@@ -69,7 +75,7 @@ async function authenticateFirstOwner(page: Page) {
   await expect(
     page.getByRole("heading", { name: "Incident Dashboard" }),
   ).toBeVisible({
-    timeout: 15_000,
+    timeout: expectTimeout,
   });
 }
 
