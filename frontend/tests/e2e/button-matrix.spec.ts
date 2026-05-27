@@ -351,14 +351,24 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
 
   await page.goto("/plugins");
   await expectRouteHeading(page, "Plugins");
-  await clickEnabled(page.getByRole("button", { name: /^install$/i }).first());
-  await expect(page.getByRole("button", { name: /^update$/i }).first()).toBeVisible({
-    timeout: expectTimeout,
-  });
-  await clickEnabled(page.getByRole("button", { name: /^remove$/i }).first());
-  await expect(page.getByRole("button", { name: /^install$/i }).first()).toBeVisible({
-    timeout: expectTimeout,
-  });
+  const installButtons = page.getByRole("button", { name: /^install$/i });
+  const updateButtons = page.getByRole("button", { name: /^update$/i });
+  const removeButtons = page.getByRole("button", { name: /^remove$/i });
+  if ((await installButtons.count()) > 0) {
+    await clickEnabled(installButtons.first());
+    await expect(updateButtons.first()).toBeVisible({ timeout: expectTimeout });
+    await clickEnabled(removeButtons.first());
+    await expect(installButtons.first()).toBeVisible({ timeout: expectTimeout });
+  } else {
+    await clickEnabled(updateButtons.first());
+    await expect(page.getByText(/installed|updated/i).first()).toBeVisible({
+      timeout: expectTimeout,
+    });
+    await clickEnabled(removeButtons.first());
+    await expect(installButtons.first()).toBeVisible({ timeout: expectTimeout });
+    await clickEnabled(installButtons.first());
+    await expect(updateButtons.first()).toBeVisible({ timeout: expectTimeout });
+  }
 
   await page.goto("/demo");
   await expectRouteHeading(page, "Demo Mode");
