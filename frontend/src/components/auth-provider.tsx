@@ -50,6 +50,7 @@ type AuthContextValue = {
 };
 
 const CSRF_COOKIE_NAME = "devpilot_csrf";
+const AUTH_SESSION_REFRESH_ATTEMPTS = 3;
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function readCookie(name: string) {
@@ -75,6 +76,31 @@ async function parseJsonResponse(response: Response) {
   return payload as AuthSession;
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function fetchAuthSessionWithRetry() {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < AUTH_SESSION_REFRESH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(apiUrl("/auth/session"), {
+        cache: "no-store",
+        credentials: "include",
+      });
+      return await parseJsonResponse(response);
+    } catch (error) {
+      lastError = error;
+      if (attempt < AUTH_SESSION_REFRESH_ATTEMPTS - 1) {
+        await wait(350 * (attempt + 1));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 function isProtectedFrontendPath(pathname: string) {
   return pathname !== "/";
 }
@@ -90,11 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshSession = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(apiUrl("/auth/session"), {
-        cache: "no-store",
-        credentials: "include",
-      });
-      const payload = await parseJsonResponse(response);
+      const payload = await fetchAuthSessionWithRetry();
       setSession(payload);
       setLoadError(null);
     } catch (error) {
