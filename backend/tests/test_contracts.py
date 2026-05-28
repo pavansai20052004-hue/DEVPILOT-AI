@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import base64
 import warnings
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -177,6 +179,68 @@ def test_missing_external_credentials_return_clean_errors(
     )
     assert kubernetes_response.status_code == 400
     assert "Kubeconfig file was not found" in kubernetes_response.json()["detail"]
+
+
+def test_kubeconfig_base64_env_is_materialized_for_live_render_secret(
+    backend_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kubeconfig = "\n".join(
+        [
+            "apiVersion: v1",
+            "kind: Config",
+            "clusters: []",
+            "contexts: []",
+            "users: []",
+            "",
+        ],
+    )
+    encoded_kubeconfig = base64.b64encode(kubeconfig.encode("utf-8")).decode(
+        "ascii",
+    )
+
+    monkeypatch.setenv("KUBECONFIG_B64", encoded_kubeconfig)
+
+    resolved_path = backend_module.resolve_kubeconfig_path(None)
+
+    assert resolved_path is not None
+    resolved_file = Path(resolved_path)
+    assert resolved_file.exists()
+    assert resolved_file.parent.name == "devpilot-ai"
+    assert resolved_file.read_text(encoding="utf-8") == kubeconfig
+
+
+def test_kubeconfig_content_env_accepts_escaped_newlines(
+    backend_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kubeconfig = (
+        "apiVersion: v1\\n"
+        "kind: Config\\n"
+        "clusters: []\\n"
+        "contexts: []\\n"
+        "users: []"
+    )
+
+    monkeypatch.setenv("KUBECONFIG_CONTENT", kubeconfig)
+
+    resolved_path = backend_module.resolve_kubeconfig_path(None)
+
+    assert resolved_path is not None
+    assert Path(resolved_path).read_text(encoding="utf-8").endswith("users: []\n")
+
+
+def test_invalid_kubeconfig_base64_env_returns_clean_error(
+    backend_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KUBECONFIG_B64", "not base64")
+
+    with pytest.raises(backend_module.HTTPException) as raised_error:
+        backend_module.resolve_kubeconfig_path(None)
+
+    assert raised_error.value.status_code == 400
+    assert "KUBECONFIG_B64" in raised_error.value.detail
 
 
 def test_openapi_generation_has_no_duplicate_operation_warnings(

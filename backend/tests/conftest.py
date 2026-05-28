@@ -22,6 +22,8 @@ for secret_name in (
     "GITHUB_TOKEN",
     "SLACK_WEBHOOK_URL",
     "KUBECONFIG",
+    "KUBECONFIG_B64",
+    "KUBECONFIG_CONTENT",
 ):
     os.environ.pop(secret_name, None)
 
@@ -44,6 +46,8 @@ def isolated_backend_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         "GITHUB_TOKEN",
         "SLACK_WEBHOOK_URL",
         "KUBECONFIG",
+        "KUBECONFIG_B64",
+        "KUBECONFIG_CONTENT",
     ):
         monkeypatch.delenv(secret_name, raising=False)
 
