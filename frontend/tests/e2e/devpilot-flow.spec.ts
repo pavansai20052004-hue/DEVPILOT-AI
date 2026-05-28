@@ -1,8 +1,18 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-const adminEmail = "admin@example.com";
-const adminPassword = "CorrectHorseBatteryStaple!";
 const liveRun = process.env.PLAYWRIGHT_LIVE === "true";
+const adminEmail = liveRun
+  ? process.env.PLAYWRIGHT_ADMIN_EMAIL
+  : (process.env.PLAYWRIGHT_ADMIN_EMAIL ?? "admin@example.com");
+const adminPassword = liveRun
+  ? process.env.PLAYWRIGHT_ADMIN_PASSWORD
+  : (process.env.PLAYWRIGHT_ADMIN_PASSWORD ?? "CorrectHorseBatteryStaple!");
+
+if (!adminEmail || !adminPassword) {
+  throw new Error(
+    "Set PLAYWRIGHT_ADMIN_EMAIL and PLAYWRIGHT_ADMIN_PASSWORD for live E2E runs.",
+  );
+}
 const expectTimeout = liveRun ? 60_000 : 15_000;
 const authChoiceTimeout = liveRun ? 30_000 : 10_000;
 const shortAuthTimeout = liveRun ? 30_000 : 5_000;
@@ -44,32 +54,37 @@ async function isVisible(locator: Locator, timeout = 2_000) {
   }
 }
 
+async function gotoAppRoute(page: Page, href: string) {
+  await page.goto(href, { waitUntil: "domcontentloaded" });
+}
+
 async function authenticateFirstOwner(page: Page) {
-  await page.goto("/dashboard");
+  await gotoAppRoute(page, "/dashboard");
 
   const createWorkspaceButton = page.getByRole("button", {
-    name: /create secure workspace/i,
+    name: /create owner workspace/i,
   });
-  const signInButton = page.getByRole("button", { name: /^sign in$/i });
+  const submitButton = page.locator('form button[type="submit"]');
 
   if (await isVisible(createWorkspaceButton, authChoiceTimeout)) {
-    await page.getByPlaceholder("Full name").fill("E2E Admin");
-    await page.getByPlaceholder("Email").fill(adminEmail);
-    await page.getByPlaceholder("Password").fill(adminPassword);
-    await page.getByPlaceholder("Team name").fill("DevPilot E2E");
+    await page.getByPlaceholder("Pavan Sai").fill("E2E Admin");
+    await page.getByPlaceholder("you@company.com").fill(adminEmail);
+    await page.getByPlaceholder("12+ characters").fill(adminPassword);
+    await page.getByPlaceholder("Repeat password").fill(adminPassword);
+    await page.getByPlaceholder("Acme DevOps").fill("DevPilot E2E");
     await createWorkspaceButton.click();
     if (!(await isVisible(page.getByRole("heading", { name: "Incident Dashboard" }), shortAuthTimeout))) {
-      await page.goto("/dashboard");
-      await expect(signInButton).toBeVisible();
-      await page.getByPlaceholder("Email").fill(adminEmail);
-      await page.getByPlaceholder("Password").fill(adminPassword);
-      await signInButton.click();
+      await gotoAppRoute(page, "/dashboard");
+      await expect(submitButton).toBeVisible();
+      await page.getByPlaceholder("you@company.com").fill(adminEmail);
+      await page.getByPlaceholder("12+ characters").fill(adminPassword);
+      await submitButton.click();
     }
   } else {
-    await expect(signInButton).toBeVisible();
-    await page.getByPlaceholder("Email").fill(adminEmail);
-    await page.getByPlaceholder("Password").fill(adminPassword);
-    await signInButton.click();
+    await expect(submitButton).toBeVisible();
+    await page.getByPlaceholder("you@company.com").fill(adminEmail);
+    await page.getByPlaceholder("12+ characters").fill(adminPassword);
+    await submitButton.click();
   }
 
   await expect(
@@ -82,7 +97,7 @@ async function authenticateFirstOwner(page: Page) {
 test("DevPilot incident flow updates the dashboard", async ({ page }) => {
   await authenticateFirstOwner(page);
 
-  await page.goto("/logs");
+  await gotoAppRoute(page, "/logs");
 
   await page.getByLabel("Paste Logs").fill(sampleLog);
   await page.getByRole("button", { name: /submit logs/i }).click();
@@ -93,7 +108,7 @@ test("DevPilot incident flow updates the dashboard", async ({ page }) => {
     page.getByText(/missing required database runtime configuration/i),
   ).toBeVisible();
 
-  await page.goto("/fix-pr");
+  await gotoAppRoute(page, "/fix-pr");
   await page.getByLabel("Detected Issue").fill(
     "Production API has CrashLoopBackOff because DATABASE_URL is missing.",
   );
@@ -101,11 +116,11 @@ test("DevPilot incident flow updates the dashboard", async ({ page }) => {
   await expect(page.getByText("Generated Files")).toBeVisible();
   await expect(page.getByText("Deployment Suggestions")).toBeVisible();
 
-  await page.goto("/auto-heal");
+  await gotoAppRoute(page, "/auto-heal");
   await page.getByRole("button", { name: /run manual heal/i }).click();
   await expect(page.getByText(/infrastructure healed successfully/i)).toBeVisible();
 
-  await page.goto("/dashboard");
+  await gotoAppRoute(page, "/dashboard");
   await expect(page.getByText(/live memory/i)).toBeVisible();
   await expect(page.getByText(/DATABASE_URL is not configured/i)).toBeVisible();
   await expect(page.getByText("Auto Heal").first()).toBeVisible();
@@ -113,13 +128,13 @@ test("DevPilot incident flow updates the dashboard", async ({ page }) => {
 });
 
 test("DevPilot app routes render after authentication", async ({ page }) => {
-  await page.goto("/");
+  await gotoAppRoute(page, "/");
   await expect(page.locator("body")).toContainText("DevPilot AI");
 
   await authenticateFirstOwner(page);
 
   for (const route of appRoutes) {
-    await page.goto(route.href);
+    await gotoAppRoute(page, route.href);
     await expect(
       page
         .locator("header")

@@ -1,8 +1,18 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-const adminEmail = "admin@example.com";
-const adminPassword = "CorrectHorseBatteryStaple!";
 const liveRun = process.env.PLAYWRIGHT_LIVE === "true";
+const adminEmail = liveRun
+  ? process.env.PLAYWRIGHT_ADMIN_EMAIL
+  : (process.env.PLAYWRIGHT_ADMIN_EMAIL ?? "admin@example.com");
+const adminPassword = liveRun
+  ? process.env.PLAYWRIGHT_ADMIN_PASSWORD
+  : (process.env.PLAYWRIGHT_ADMIN_PASSWORD ?? "CorrectHorseBatteryStaple!");
+
+if (!adminEmail || !adminPassword) {
+  throw new Error(
+    "Set PLAYWRIGHT_ADMIN_EMAIL and PLAYWRIGHT_ADMIN_PASSWORD for live E2E runs.",
+  );
+}
 const expectTimeout = liveRun ? 60_000 : 15_000;
 const authChoiceTimeout = liveRun ? 30_000 : 10_000;
 const shortAuthTimeout = liveRun ? 30_000 : 5_000;
@@ -46,34 +56,39 @@ async function isVisible(locator: Locator, timeout = 2_000) {
   }
 }
 
+async function gotoAppRoute(page: Page, href: string) {
+  await page.goto(href, { waitUntil: "domcontentloaded" });
+}
+
 async function authenticateFirstOwner(page: Page) {
   const uniqueEmail = adminEmail;
   const uniqueTeamName = `DevPilot E2E ${Date.now()}`;
-  await page.goto("/dashboard");
+  await gotoAppRoute(page, "/dashboard");
 
   const createWorkspaceButton = page.getByRole("button", {
-    name: /create secure workspace/i,
+    name: /create owner workspace/i,
   });
-  const signInButton = page.getByRole("button", { name: /^sign in$/i });
+  const submitButton = page.locator('form button[type="submit"]');
 
   if (await isVisible(createWorkspaceButton, authChoiceTimeout)) {
-    await page.getByPlaceholder("Full name").fill("E2E Admin");
-    await page.getByPlaceholder("Email").fill(uniqueEmail);
-    await page.getByPlaceholder("Password").fill(adminPassword);
-    await page.getByPlaceholder("Team name").fill(uniqueTeamName);
+    await page.getByPlaceholder("Pavan Sai").fill("E2E Admin");
+    await page.getByPlaceholder("you@company.com").fill(uniqueEmail);
+    await page.getByPlaceholder("12+ characters").fill(adminPassword);
+    await page.getByPlaceholder("Repeat password").fill(adminPassword);
+    await page.getByPlaceholder("Acme DevOps").fill(uniqueTeamName);
     await createWorkspaceButton.click();
     if (!(await isVisible(page.getByRole("heading", { name: "Incident Dashboard" }), shortAuthTimeout))) {
-      await page.goto("/dashboard");
-      await expect(signInButton).toBeVisible();
-      await page.getByPlaceholder("Email").fill(uniqueEmail);
-      await page.getByPlaceholder("Password").fill(adminPassword);
-      await signInButton.click();
+      await gotoAppRoute(page, "/dashboard");
+      await expect(submitButton).toBeVisible();
+      await page.getByPlaceholder("you@company.com").fill(uniqueEmail);
+      await page.getByPlaceholder("12+ characters").fill(adminPassword);
+      await submitButton.click();
     }
   } else {
-    await expect(signInButton).toBeVisible();
-    await page.getByPlaceholder("Email").fill(uniqueEmail);
-    await page.getByPlaceholder("Password").fill(adminPassword);
-    await signInButton.click();
+    await expect(submitButton).toBeVisible();
+    await page.getByPlaceholder("you@company.com").fill(uniqueEmail);
+    await page.getByPlaceholder("12+ characters").fill(adminPassword);
+    await submitButton.click();
   }
 
   await expect(
@@ -97,7 +112,7 @@ async function clickEnabled(locator: Locator) {
 }
 
 async function runDemo(page: Page) {
-  await page.goto("/demo");
+  await gotoAppRoute(page, "/demo");
   await expectRouteHeading(page, "Demo Mode");
   const demoButton = page
     .locator("#demo-mode")
@@ -199,7 +214,7 @@ test("button matrix renders every authenticated route", async ({ page }) => {
   await authenticateFirstOwner(page);
 
   for (const route of appRoutes) {
-    await page.goto(route.href);
+    await gotoAppRoute(page, route.href);
     await expectRouteHeading(page, route.label);
   }
 });
@@ -208,7 +223,7 @@ test("operate buttons stay within safe local workflows", async ({ page }) => {
   await authenticateFirstOwner(page);
   await runDemo(page);
 
-  await page.goto("/dashboard");
+  await gotoAppRoute(page, "/dashboard");
   await expectRouteHeading(page, "Incident Dashboard");
   const downloadButton = page.getByRole("button", { name: /download pdf/i });
   await expect(downloadButton).toBeEnabled({ timeout: expectTimeout });
@@ -217,7 +232,7 @@ test("operate buttons stay within safe local workflows", async ({ page }) => {
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/devpilot-incident-report.*\.pdf/i);
 
-  await page.goto("/logs");
+  await gotoAppRoute(page, "/logs");
   await expectRouteHeading(page, "Log Intake");
   await page.getByLabel("Paste Logs").fill(sampleLog);
   await clickEnabled(page.getByRole("button", { name: /submit logs/i }));
@@ -227,7 +242,7 @@ test("operate buttons stay within safe local workflows", async ({ page }) => {
     page.getByText(/missing required database runtime configuration/i),
   ).toBeVisible();
 
-  await page.goto("/kubernetes");
+  await gotoAppRoute(page, "/kubernetes");
   await expectRouteHeading(page, "Kubernetes");
   await clickEnabled(page.getByRole("button", { name: /load demo cluster/i }));
   await expect(page.getByText(/demo cluster loaded/i)).toBeVisible();
@@ -236,7 +251,7 @@ test("operate buttons stay within safe local workflows", async ({ page }) => {
   await clickEnabled(page.getByRole("button", { name: /^rollback$/i }).first());
   await expect(page.getByText(/demo rollback completed/i)).toBeVisible();
 
-  await page.goto("/auto-heal");
+  await gotoAppRoute(page, "/auto-heal");
   await expectRouteHeading(page, "Auto Heal");
   await clickEnabled(page.getByRole("button", { name: /run manual heal/i }));
   await expect(page.getByText(/infrastructure healed successfully/i)).toBeVisible();
@@ -246,7 +261,7 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await mockPullRequestCreation(page);
   await authenticateFirstOwner(page);
 
-  await page.goto("/agents");
+  await gotoAppRoute(page, "/agents");
   await expectRouteHeading(page, "Autonomous Agents");
   await clickEnabled(page.getByRole("button", { name: /run collaboration/i }));
   const rejectButtonLocator = page.getByRole("button", { name: /^reject$/i });
@@ -282,24 +297,24 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await clickEnabled(approveButtonLocator.first());
   await approveReviewResponse;
 
-  await page.goto("/predictive-failures");
+  await gotoAppRoute(page, "/predictive-failures");
   await expectRouteHeading(page, "Failure Prediction");
   await clickEnabled(page.getByRole("button", { name: /run prediction/i }));
   await expect(page.getByText(/risk/i).first()).toBeVisible();
 
-  await page.goto("/model-training");
+  await gotoAppRoute(page, "/model-training");
   await expectRouteHeading(page, "Model Training");
   await clickEnabled(page.getByRole("button", { name: /train model/i }));
   await expect(page.getByText(/custom score/i)).toBeVisible({ timeout: expectTimeout });
 
-  await page.goto("/terraform");
+  await gotoAppRoute(page, "/terraform");
   await expectRouteHeading(page, "Terraform");
   await clickEnabled(page.getByRole("button", { name: /detect drift/i }));
   await expect(page.getByText(/drift findings/i)).toBeVisible();
   await clickEnabled(page.getByRole("button", { name: /auto-patch terraform/i }));
   await expect(page.getByText(/terraform infra auto-patched/i)).toBeVisible();
 
-  await page.goto("/fix-pr");
+  await gotoAppRoute(page, "/fix-pr");
   await expectRouteHeading(page, "Fix Pull Request");
   await page.getByLabel("Repository").fill("demo/devpilot-ai");
   await clickEnabled(page.getByRole("button", { name: /generate files/i }));
@@ -309,13 +324,13 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
     timeout: expectTimeout,
   });
 
-  await page.goto("/infra-command");
+  await gotoAppRoute(page, "/infra-command");
   await expectRouteHeading(page, "Plain English Infra");
   await page.getByLabel("Command").fill("Restart pods for deployment devpilot-api");
   await clickEnabled(page.getByRole("button", { name: /preview plan/i }));
   await expect(page.getByText(/translated into an infrastructure plan/i)).toBeVisible();
 
-  await page.goto("/chaos");
+  await gotoAppRoute(page, "/chaos");
   await expectRouteHeading(page, "Chaos Engineering");
   await clickEnabled(page.getByRole("button", { name: /inject failure/i }));
   await expect(page.getByText(/auto-heal executed/i)).toBeVisible({ timeout: expectTimeout });
@@ -325,7 +340,7 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
   await installVoiceMocks(page);
   await authenticateFirstOwner(page);
 
-  await page.goto("/account");
+  await gotoAppRoute(page, "/account");
   await expectRouteHeading(page, "Account & Billing");
   const matrixTeamName = `Matrix Team ${Date.now()}`;
   await page.getByPlaceholder("Team name").fill(matrixTeamName);
@@ -339,38 +354,54 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
   await clickEnabled(page.getByRole("button", { name: /^invite$/i }));
   await expect(page.getByText(/@example\.com/i).first()).toBeVisible();
 
-  await page.goto("/security");
+  await gotoAppRoute(page, "/security");
   await expectRouteHeading(page, "Security");
   await clickEnabled(page.getByRole("button", { name: /refresh report/i }));
   await expect(page.getByText(/findings/i).first()).toBeVisible();
 
-  await page.goto("/cost");
+  await gotoAppRoute(page, "/cost");
   await expectRouteHeading(page, "Cloud Cost");
   await clickEnabled(page.getByRole("button", { name: /refresh savings/i }));
   await expect(page.getByText(/recommendations/i)).toBeVisible();
 
-  await page.goto("/plugins");
+  await gotoAppRoute(page, "/plugins");
   await expectRouteHeading(page, "Plugins");
   const installButtons = page.getByRole("button", { name: /^install$/i });
   const updateButtons = page.getByRole("button", { name: /^update$/i });
   const removeButtons = page.getByRole("button", { name: /^remove$/i });
+  await expect(
+    page.getByRole("button", { name: /^(install|update)$/i }).first(),
+  ).toBeVisible({ timeout: expectTimeout });
+
   if ((await installButtons.count()) > 0) {
     await clickEnabled(installButtons.first());
+    await expect(page.getByText(/integration installed\./i).first()).toBeVisible({
+      timeout: expectTimeout,
+    });
     await expect(updateButtons.first()).toBeVisible({ timeout: expectTimeout });
     await clickEnabled(removeButtons.first());
+    await expect(page.getByText(/integration uninstalled\./i).first()).toBeVisible({
+      timeout: expectTimeout,
+    });
     await expect(installButtons.first()).toBeVisible({ timeout: expectTimeout });
   } else {
     await clickEnabled(updateButtons.first());
-    await expect(page.getByText(/installed|updated/i).first()).toBeVisible({
+    await expect(page.getByText(/integration installed\./i).first()).toBeVisible({
       timeout: expectTimeout,
     });
     await clickEnabled(removeButtons.first());
+    await expect(page.getByText(/integration uninstalled\./i).first()).toBeVisible({
+      timeout: expectTimeout,
+    });
     await expect(installButtons.first()).toBeVisible({ timeout: expectTimeout });
     await clickEnabled(installButtons.first());
+    await expect(page.getByText(/integration installed\./i).first()).toBeVisible({
+      timeout: expectTimeout,
+    });
     await expect(updateButtons.first()).toBeVisible({ timeout: expectTimeout });
   }
 
-  await page.goto("/demo");
+  await gotoAppRoute(page, "/demo");
   await expectRouteHeading(page, "Demo Mode");
   await clickEnabled(page.locator("#demo-mode").getByRole("button", { name: /run demo/i }));
   await expect(
@@ -379,7 +410,7 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
   await clickEnabled(page.locator("#judge-mode").getByRole("button", { name: /judge mode/i }));
   await expect(page.getByText(/elapsed/i)).toBeVisible({ timeout: expectTimeout });
 
-  await page.goto("/voice");
+  await gotoAppRoute(page, "/voice");
   await expectRouteHeading(page, "Voice Assistant");
   await clickEnabled(page.getByRole("button", { name: /^mic$/i }));
   await expect(page.getByRole("button", { name: /^stop$/i })).toBeVisible();
