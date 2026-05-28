@@ -156,7 +156,8 @@ out of local test runs unless you deliberately want live integrations.
 - Create a Neon Postgres database separately and set its connection string as the required Render secret `DATABASE_URL`.
 - Set `SESSION_SECRET` to a generated high-entropy value.
 - Set `FRONTEND_ORIGINS` to your deployed frontend origins if you use custom domains. The bundled regex already covers default `*.vercel.app` and `*.netlify.app` hosts.
-- Set `OPENAI_API_KEY`, `GITHUB_TOKEN`, `SLACK_WEBHOOK_URL`, and `KUBECONFIG` only when live integrations are needed.
+- Set `OPENAI_API_KEY`, `GITHUB_TOKEN`, `SLACK_WEBHOOK_URL`, and Kubernetes credentials only when live integrations are needed.
+- For Kubernetes on Render, prefer `KUBECONFIG_B64`: base64-encode the kubeconfig YAML and store that value as a Render secret. `KUBECONFIG_CONTENT` also works for hosts that safely support multiline secrets, while `KUBECONFIG` is for local/dev file paths.
 - Render should use `/ready` as the health check because it verifies the database connection.
 - `render.yaml` is backend-only and does not provision a Render database.
 
@@ -172,6 +173,8 @@ APP_ENV=production
 DATABASE_URL=postgresql://...
 SESSION_SECRET=<generated secret>
 FRONTEND_ORIGINS=https://your-vercel-app.vercel.app,https://your-netlify-site.netlify.app
+KUBECONFIG_B64=<base64-encoded kubeconfig for Render live mode>
+KUBECONFIG_CONTENT=
 KUBECONFIG=
 ```
 

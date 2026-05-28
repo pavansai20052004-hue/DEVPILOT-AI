@@ -35,6 +35,12 @@ services:
         sync: false
       - key: SLACK_WEBHOOK_URL
         sync: false
+      # Prefer KUBECONFIG_B64 on Render: base64-encode the kubeconfig YAML and
+      # store it as a secret. KUBECONFIG remains available for path-based hosts.
+      - key: KUBECONFIG_B64
+        sync: false
+      - key: KUBECONFIG_CONTENT
+        sync: false
       - key: KUBECONFIG
         sync: false
       - key: GITHUB_TOKEN

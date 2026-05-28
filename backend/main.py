@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import sqlite3
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
@@ -2242,9 +2243,12 @@ PLUGIN_MARKETPLACE_CATALOG: dict[PluginId, dict[str, Any]] = {
             "Deployment rollback",
             "Replica scaling",
         ],
-        "required_secrets": ["KUBECONFIG or in-cluster service account"],
+        "required_secrets": [
+            "KUBECONFIG_B64 or KUBECONFIG_CONTENT",
+            "KUBECONFIG path for local/dev hosts",
+        ],
         "setup_steps": [
-            "Provide kubeconfig or run DevPilot inside the cluster.",
+            "Store a least-privilege kubeconfig as a Render secret.",
             "Grant namespace-scoped read/write permissions.",
             "Confirm rollback and scale permissions for deployments.",
         ],
@@ -7919,15 +7923,116 @@ def create_github_pull_request(
     return pull_request
 
 
-def resolve_kubeconfig_path(kubeconfig_path: str | None) -> str | None:
-    configured_path = kubeconfig_path or os.getenv("KUBECONFIG")
-    if not configured_path:
-        return None
+KUBECONFIG_B64_ENV = "KUBECONFIG_B64"
+KUBECONFIG_CONTENT_ENV = "KUBECONFIG_CONTENT"
 
-    if os.pathsep in configured_path:
-        return configured_path
 
-    resolved_path = Path(configured_path).expanduser()
+def normalize_kubeconfig_content(content: str) -> str:
+    return content.strip().replace("\\n", "\n")
+
+
+def looks_like_inline_kubeconfig(value: str) -> bool:
+    normalized = normalize_kubeconfig_content(value)
+    return (
+        "apiVersion:" in normalized
+        and "clusters:" in normalized
+        and "contexts:" in normalized
+    )
+
+
+def validate_inline_kubeconfig_content(content: str, source: str) -> str:
+    normalized = normalize_kubeconfig_content(content)
+    if not normalized:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{source} is configured but empty.",
+        )
+
+    missing_keys = [
+        key
+        for key in ("apiVersion:", "clusters:", "contexts:")
+        if key not in normalized
+    ]
+    if missing_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{source} does not look like a Kubernetes kubeconfig. "
+                f"Missing {', '.join(missing_keys)}."
+            ),
+        )
+
+    return normalized + "\n"
+
+
+def inline_kubeconfig_from_environment() -> str | None:
+    encoded_kubeconfig = os.getenv(KUBECONFIG_B64_ENV, "").strip()
+    if encoded_kubeconfig:
+        try:
+            decoded = base64.b64decode(encoded_kubeconfig, validate=True).decode(
+                "utf-8",
+            )
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{KUBECONFIG_B64_ENV} is configured but is not valid base64.",
+            ) from exc
+
+        return validate_inline_kubeconfig_content(decoded, KUBECONFIG_B64_ENV)
+
+    raw_kubeconfig = os.getenv(KUBECONFIG_CONTENT_ENV, "").strip()
+    if raw_kubeconfig:
+        return validate_inline_kubeconfig_content(
+            raw_kubeconfig,
+            KUBECONFIG_CONTENT_ENV,
+        )
+
+    return None
+
+
+def write_environment_kubeconfig(content: str) -> str:
+    temp_root = (Path(tempfile.gettempdir()) / "devpilot-ai").resolve()
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    target_path = (temp_root / f"kubeconfig-{digest}.yaml").resolve()
+    if target_path.parent != temp_root:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not prepare a safe kubeconfig path.",
+        )
+
+    target_path.write_text(content, encoding="utf-8")
+    try:
+        os.chmod(target_path, 0o600)
+    except OSError:
+        logger.debug("Could not tighten kubeconfig file permissions.", exc_info=True)
+
+    return str(target_path)
+
+
+def resolve_existing_kubeconfig_path(configured_path: str) -> str:
+    normalized_path = configured_path.strip()
+    if not normalized_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Kubeconfig path is empty.",
+        )
+
+    if os.pathsep in normalized_path:
+        missing_paths = [
+            str(Path(path_value).expanduser())
+            for path_value in normalized_path.split(os.pathsep)
+            if path_value.strip() and not Path(path_value).expanduser().exists()
+        ]
+        if missing_paths:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Kubeconfig file was not found: {missing_paths[0]}",
+            )
+        return normalized_path
+
+    resolved_path = Path(normalized_path).expanduser()
     if not resolved_path.exists():
         raise HTTPException(
             status_code=400,
@@ -7935,6 +8040,36 @@ def resolve_kubeconfig_path(kubeconfig_path: str | None) -> str | None:
         )
 
     return str(resolved_path)
+
+
+def resolve_kubeconfig_path(kubeconfig_path: str | None) -> str | None:
+    if kubeconfig_path:
+        if looks_like_inline_kubeconfig(kubeconfig_path):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "kubeconfig_path accepts a file path only. Store kubeconfig "
+                    f"contents in {KUBECONFIG_B64_ENV} or {KUBECONFIG_CONTENT_ENV}."
+                ),
+            )
+        return resolve_existing_kubeconfig_path(kubeconfig_path)
+
+    inline_config = inline_kubeconfig_from_environment()
+    if inline_config is not None:
+        return write_environment_kubeconfig(inline_config)
+
+    configured_path = os.getenv("KUBECONFIG", "").strip()
+    if not configured_path:
+        return None
+
+    if looks_like_inline_kubeconfig(configured_path):
+        inline_config = validate_inline_kubeconfig_content(
+            configured_path,
+            "KUBECONFIG",
+        )
+        return write_environment_kubeconfig(inline_config)
+
+    return resolve_existing_kubeconfig_path(configured_path)
 
 
 def kubernetes_error_detail(exc: ApiException) -> str:

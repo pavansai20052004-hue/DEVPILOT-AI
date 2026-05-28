@@ -243,7 +243,7 @@ export function KubernetesClusterPanel() {
 
       if (!connectionPayload.kubeconfig_path && /kubeconfig/i.test(message)) {
         loadDemoCluster(
-          "No local kubeconfig was found, so DevPilot is showing a safe demo cluster. Add a kubeconfig path for live cluster checks.",
+          "No live kubeconfig is configured, so DevPilot is showing a safe demo cluster. Set KUBECONFIG_B64 or KUBECONFIG_CONTENT in Render for production, or add a kubeconfig path for local checks.",
         );
       } else {
         setError(message);
@@ -324,7 +324,7 @@ export function KubernetesClusterPanel() {
               : "rollback_deployment",
           completed_at: new Date().toISOString(),
         });
-        setNotice("Demo recovery action completed locally. Live mode uses your kubeconfig.");
+        setNotice("Demo recovery action completed locally. Live mode uses the Render kubeconfig secret or your supplied path.");
         setPendingAction(null);
       }, 550);
       return;
