@@ -12,13 +12,16 @@ import {
   CloudCog,
   CloudUpload,
   Command,
+  Database,
   DollarSign,
   FlaskConical,
+  GitBranch,
   GitPullRequestCreate,
   HeartPulse,
   Mic2,
   Puzzle,
   Radar,
+  RadioTower,
   ShieldCheck,
   Terminal,
   Waypoints,
@@ -53,48 +56,116 @@ const navIcons: Record<string, typeof Activity> = {
   "/account": Building2,
 };
 
+const mobilePrimaryHrefs = new Set([
+  "/dashboard",
+  "/logs",
+  "/auto-heal",
+  "/security",
+  "/demo",
+]);
+
+const mobileNavigation = flatNavigation.filter((item) =>
+  mobilePrimaryHrefs.has(item.href),
+);
+
 function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
+
+const groupAccentClasses = [
+  {
+    label: "text-cyan-100",
+    icon: "text-cyan-200",
+    active: "border-cyan-300/35 bg-cyan-300/10 text-cyan-50",
+    rail: "bg-cyan-300",
+  },
+  {
+    label: "text-lime-100",
+    icon: "text-lime-200",
+    active: "border-lime-300/35 bg-lime-300/10 text-lime-50",
+    rail: "bg-lime-300",
+  },
+  {
+    label: "text-amber-100",
+    icon: "text-amber-200",
+    active: "border-amber-300/35 bg-amber-300/10 text-amber-50",
+    rail: "bg-amber-300",
+  },
+  {
+    label: "text-rose-100",
+    icon: "text-rose-200",
+    active: "border-rose-300/35 bg-rose-300/10 text-rose-50",
+    rail: "bg-rose-300",
+  },
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const activeItem = flatNavigation.find((item) =>
     isActivePath(pathname, item.href),
   );
+  const activeGroup = navigationGroups.find((group) =>
+    group.items.some((item) => isActivePath(pathname, item.href)),
+  );
 
   return (
-    <div className="min-h-screen bg-[#050708] text-zinc-100 lg:grid lg:grid-cols-[18rem_1fr]">
-      <aside className="hidden border-r border-white/10 bg-[#080b0d]/95 lg:sticky lg:top-0 lg:block lg:h-screen lg:overflow-y-auto">
+    <div className="min-h-screen bg-[var(--background)] text-zinc-100 lg:grid lg:grid-cols-[17.75rem_1fr]">
+      <aside className="hidden border-r border-white/10 bg-[linear-gradient(180deg,rgba(12,17,24,0.98),rgba(7,8,11,0.99))] lg:sticky lg:top-0 lg:block lg:h-screen lg:overflow-y-auto">
         <div className="flex min-h-full flex-col px-4 py-5">
           <Link
             href="/"
-            className="group rounded-md border border-white/10 bg-[#0e1315] p-4 transition hover:border-emerald-300/40"
+            className="group flex items-center gap-3 rounded-md border border-white/10 bg-white/[0.04] p-4 transition hover:border-cyan-300/35"
           >
-            <div className="flex items-center gap-3">
-              <div className="grid size-10 place-items-center rounded-md border border-emerald-300/35 bg-emerald-300/10">
-                <CloudCog
-                  className="size-5 text-emerald-200"
-                  aria-hidden="true"
-                />
-              </div>
-              <div>
-                <p className="font-mono text-sm font-semibold uppercase text-white">
-                  DevPilot AI
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Your AI DevOps Engineer
-                </p>
-              </div>
+            <div className="grid size-11 shrink-0 place-items-center rounded-md border border-cyan-300/35 bg-cyan-300/10">
+              <CloudCog
+                className="size-5 text-cyan-200"
+                aria-hidden="true"
+              />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">
+                DevPilot AI
+              </p>
+              <p className="mt-1 truncate text-xs text-zinc-400">
+                AI DevOps control plane
+              </p>
             </div>
           </Link>
 
-          <nav className="mt-5 space-y-5" aria-label="DevPilot sections">
-            {navigationGroups.map((group) => (
+          <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="status-dot" />
+                <span className="text-xs font-semibold text-zinc-200">
+                  Production workspace
+                </span>
+              </div>
+              <RadioTower className="size-4 text-lime-200" aria-hidden="true" />
+            </div>
+            <div className="mt-3 flex items-center gap-3 text-xs text-zinc-400">
+              <span className="inline-flex items-center gap-1.5">
+                <GitBranch className="size-3.5 text-cyan-200" aria-hidden="true" />
+                GitHub
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Database className="size-3.5 text-lime-200" aria-hidden="true" />
+                Postgres
+              </span>
+            </div>
+          </div>
+
+          <nav className="mt-5 space-y-5 pb-5" aria-label="DevPilot sections">
+            {navigationGroups.map((group, groupIndex) => {
+              const accent = groupAccentClasses[groupIndex % groupAccentClasses.length];
+
+              return (
               <div key={group.label}>
-                <p className="mb-2 px-2 font-mono text-[11px] font-semibold uppercase tracking-normal text-zinc-600">
-                  {group.label}
-                </p>
+                <div className="mb-2 flex items-center gap-2 px-2">
+                  <span className={`h-1.5 w-1.5 rounded-full ${accent.rail}`} />
+                  <p className={`font-mono text-[11px] font-semibold uppercase tracking-normal ${accent.label}`}>
+                    {group.label}
+                  </p>
+                </div>
                 <div className="space-y-1">
                   {group.items.map((item) => {
                     const Icon = navIcons[item.href] ?? Activity;
@@ -104,16 +175,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={`group flex items-start gap-3 rounded-md border px-3 py-3 text-sm transition ${
+                        title={item.description}
+                        className={`group relative flex items-start gap-3 rounded-md border px-3 py-3 text-sm transition ${
                           active
-                            ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-50"
+                            ? accent.active
                             : "border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/[0.04] hover:text-zinc-100"
                         }`}
                       >
+                        {active ? (
+                          <span className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-r ${accent.rail}`} />
+                        ) : null}
                         <Icon
                           className={`mt-0.5 size-4 shrink-0 ${
                             active
-                              ? "text-emerald-200"
+                              ? accent.icon
                               : "text-zinc-600 group-hover:text-cyan-200"
                           }`}
                           aria-hidden="true"
@@ -122,40 +197,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           <span className="block font-semibold leading-5">
                             {item.label}
                           </span>
-                          <span className="mt-0.5 block line-clamp-2 text-xs leading-5 text-zinc-500">
-                            {item.description}
-                          </span>
                         </span>
                       </Link>
                     );
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </nav>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050708]/92 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <header className="sticky top-0 z-40 border-b border-white/10 bg-[rgba(7,8,11,0.88)] px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-[92rem] flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
             <div className="min-w-0">
               <div className="flex items-center gap-3">
                 <Link
                   href="/"
-                  className="grid size-10 shrink-0 place-items-center rounded-md border border-emerald-300/35 bg-emerald-300/10 lg:hidden"
+                  className="grid size-10 shrink-0 place-items-center rounded-md border border-cyan-300/35 bg-cyan-300/10 lg:hidden"
                   aria-label="DevPilot AI home"
                 >
                   <CloudCog
-                    className="size-5 text-emerald-200"
+                    className="size-5 text-cyan-200"
                     aria-hidden="true"
                   />
                 </Link>
                 <div className="min-w-0">
-                  <p className="truncate font-mono text-xs font-semibold uppercase text-emerald-100">
-                    DevPilot AI
+                  <p className="truncate font-mono text-xs font-semibold uppercase text-cyan-100">
+                    {activeGroup?.label ?? "DevPilot AI"}
                   </p>
-                  <h1 className="truncate text-base font-semibold text-white sm:text-lg">
+                  <h1 className="truncate text-lg font-semibold text-white sm:text-xl">
                     {activeItem?.label ?? "Your AI DevOps Engineer"}
                   </h1>
                 </div>
@@ -165,7 +238,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden"
                 aria-label="Mobile DevPilot sections"
               >
-                {flatNavigation.map((item) => {
+                {mobileNavigation.map((item) => {
                   const Icon = navIcons[item.href] ?? Activity;
                   const active = isActivePath(pathname, item.href);
 
@@ -175,7 +248,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       href={item.href}
                       className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-md border px-3 text-xs font-semibold transition ${
                         active
-                          ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-50"
+                          ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-50"
                           : "border-white/10 bg-white/[0.04] text-zinc-300"
                       }`}
                     >
@@ -187,7 +260,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </nav>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
               <JudgeModeButton variant="header" />
               <DemoRunButton variant="header" />
               <TeamSwitcher />
@@ -198,7 +271,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">{children}</div>
+          <div className="mx-auto max-w-[92rem]">
+            {children}
+          </div>
         </main>
       </div>
     </div>

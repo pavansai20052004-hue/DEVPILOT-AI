@@ -19,9 +19,9 @@ import {
 } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "DevPilot AI | Investor Landing Page",
+  title: "DevPilot AI | AI DevOps Control Plane",
   description:
-    "Investor-ready landing page for DevPilot AI, the AI DevOps engineer for incident recovery, remediation, and cloud operations ROI.",
+    "DevPilot AI is an AI DevOps control plane for incident recovery, remediation, and cloud operations ROI.",
 };
 
 const navLinks = [
@@ -35,16 +35,24 @@ const navLinks = [
 const heroMetrics = [
   {
     value: "$723B",
-    label: "2025 public cloud spend forecast",
+    label: "public cloud spend forecast",
   },
   {
     value: "$300K+",
-    label: "hourly downtime exposure for many enterprises",
+    label: "hourly outage exposure for enterprise teams",
   },
   {
-    value: "4-step",
-    label: "detect, diagnose, fix, heal loop",
+    value: "100%",
+    label: "demo recovery loop ready for judges",
   },
+];
+
+const heroProofs = [
+  "Live dashboard",
+  "AI diagnosis",
+  "Terraform remediation",
+  "Kubernetes recovery",
+  "SaaS metering",
 ];
 
 const marketSignals = [
@@ -195,19 +203,19 @@ const productHighlights = [
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#050708] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#050708]/88 backdrop-blur-xl">
+    <div className="min-h-screen bg-[var(--background)] text-zinc-100">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[rgba(7,8,11,0.88)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="DevPilot AI home">
-            <span className="grid size-10 shrink-0 place-items-center rounded-md border border-emerald-300/35 bg-emerald-300/10">
-              <CloudCog className="size-5 text-emerald-200" aria-hidden="true" />
+            <span className="grid size-10 shrink-0 place-items-center rounded-md border border-cyan-300/35 bg-cyan-300/10">
+              <CloudCog className="size-5 text-cyan-200" aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block truncate font-mono text-sm font-semibold uppercase text-white">
+              <span className="block truncate text-sm font-semibold text-white">
                 DevPilot AI
               </span>
-              <span className="block truncate text-xs text-zinc-500">
-                AI DevOps Engineer
+              <span className="block truncate text-xs text-zinc-400">
+                AI operations control plane
               </span>
             </span>
           </Link>
@@ -226,17 +234,17 @@ export default function Home() {
 
           <Link
             href="/dashboard"
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-emerald-300/40 bg-emerald-300 px-3 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 focus:ring-offset-[#050708] sm:px-4"
+            className="premium-button inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-lime-200 focus:ring-offset-2 focus:ring-offset-[var(--background)] sm:px-4"
           >
             <Command className="size-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Open Product</span>
+            <span className="hidden sm:inline">Launch Cockpit</span>
             <span className="sm:hidden">Product</span>
           </Link>
         </div>
       </header>
 
       <main>
-        <section className="relative isolate overflow-hidden">
+        <section className="relative isolate overflow-hidden border-b border-white/10">
           <div className="absolute inset-0 -z-10">
             <Image
               src="/devpilot-hero.png"
@@ -244,33 +252,34 @@ export default function Home() {
               fill
               priority
               sizes="100vw"
-              className="object-cover object-center opacity-45"
+              className="object-cover object-center opacity-60"
             />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,7,8,0.98)_0%,rgba(5,7,8,0.82)_50%,rgba(5,7,8,0.42)_100%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(7,8,11,0.98)_0%,rgba(7,8,11,0.86)_48%,rgba(7,8,11,0.56)_100%)]" />
+            <div className="absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(180deg,transparent,rgba(7,8,11,0.98))]" />
           </div>
 
-          <div className="mx-auto flex min-h-[72svh] max-w-7xl flex-col justify-center px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto flex min-h-[74svh] max-w-7xl flex-col justify-center px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
             <div className="max-w-4xl">
-              <div className="inline-flex w-fit items-center gap-2 rounded-md border border-emerald-300/35 bg-emerald-300/10 px-3 py-2 font-mono text-xs font-semibold uppercase text-emerald-100">
-                <span className="size-2 rounded-full bg-emerald-300" />
-                Investor landing page
+              <div className="premium-eyebrow w-fit">
+                <span className="size-2 rounded-full bg-lime-300" />
+                Working AI DevOps product for investor review
               </div>
-              <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-none text-white sm:text-6xl lg:text-7xl">
+              <h1 className="font-display mt-6 max-w-3xl text-5xl font-semibold leading-none text-white sm:text-6xl lg:text-7xl">
                 DevPilot AI
               </h1>
               <p className="mt-5 max-w-3xl text-xl font-semibold leading-tight text-zinc-100 sm:text-2xl lg:text-3xl">
-                The AI DevOps engineer that turns incidents into verified recovery actions.
+                The AI operations cockpit that turns production incidents into verified recovery actions.
               </p>
               <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-400 sm:text-lg">
-                DevPilot connects observability, Kubernetes recovery, Terraform remediation,
-                cloud cost, security, and SaaS metering into one AI-assisted operations loop
-                for teams that cannot afford slow incident response.
+                DevPilot brings logs, Kubernetes health, Terraform remediation,
+                cloud cost, security, and SaaS metering into one human-approved
+                recovery loop built for serious DevOps buyers.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
                   href="/dashboard"
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-emerald-300/40 bg-emerald-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 focus:ring-offset-[#050708]"
+                  className="premium-button inline-flex h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-lime-200 focus:ring-offset-2 focus:ring-offset-[var(--background)]"
                 >
                   <BarChart3 className="size-4" aria-hidden="true" />
                   View Live Dashboard
@@ -285,16 +294,60 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-10 grid gap-3 sm:grid-cols-3">
-              {heroMetrics.map((metric) => (
-                <div
-                  key={metric.label}
-                  className="rounded-md border border-white/10 bg-[#090d0f]/80 p-4 backdrop-blur"
-                >
-                  <p className="font-mono text-2xl font-semibold text-white">{metric.value}</p>
-                  <p className="mt-2 text-sm leading-5 text-zinc-400">{metric.label}</p>
+            <div className="hero-frame mt-9 p-4 sm:p-5">
+              <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    {heroProofs.map((proof) => (
+                      <span
+                        key={proof}
+                        className="inline-flex min-h-8 items-center rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200"
+                      >
+                        {proof}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                    {heroMetrics.map((metric) => (
+                      <div
+                        key={metric.label}
+                        className="rounded-md border border-white/10 bg-black/25 p-4"
+                      >
+                        <p className="font-mono text-2xl font-semibold text-white">
+                          {metric.value}
+                        </p>
+                        <p className="mt-2 text-sm leading-5 text-zinc-400">
+                          {metric.label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+
+                <div className="grid gap-3 sm:grid-cols-4">
+                  {solutionSteps.map((step, index) => {
+                    const Icon = step.icon;
+
+                    return (
+                      <div
+                        key={step.title}
+                        className="relative rounded-md border border-white/10 bg-white/[0.055] p-4"
+                      >
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                          <Icon className="size-5 text-cyan-200" aria-hidden="true" />
+                          <span className="font-mono text-xs text-zinc-500">
+                            0{index + 1}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-semibold text-white">{step.title}</h3>
+                        <p className="mt-2 text-xs leading-5 text-zinc-400">
+                          {step.description}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </section>

@@ -96,6 +96,108 @@ def test_auth_bootstrap_replay_returns_clean_conflict(client: TestClient) -> Non
     )
 
 
+def test_signup_creates_separate_user_and_workspace(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    response = client.post(
+        "/auth/signup",
+        json={
+            "email": "founder@example.com",
+            "password": "AnotherCorrectHorse!",
+            "full_name": "Founder User",
+            "team_name": "Founder Workspace",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["authenticated"] is True
+    assert payload["user"]["email"] == "founder@example.com"
+    assert payload["current_team"]["name"] == "Founder Workspace"
+    assert payload["current_team"]["owner_email"] == "founder@example.com"
+    assert payload["role"] == "admin"
+
+    existing_response = client.post(
+        "/auth/signup",
+        json={
+            "email": "founder@example.com",
+            "password": "AnotherCorrectHorse!",
+            "team_name": "Duplicate Workspace",
+        },
+    )
+    assert existing_response.status_code == 409
+
+
+def test_password_reset_flow_uses_single_use_token(client: TestClient) -> None:
+    bootstrap_admin(client)
+    signup_response = client.post(
+        "/auth/signup",
+        json={
+            "email": "reset-me@example.com",
+            "password": "OldCorrectHorsePass!",
+            "team_name": "Reset Workspace",
+        },
+    )
+    assert signup_response.status_code == 200, signup_response.text
+
+    reset_response = client.post(
+        "/auth/password-reset/request",
+        json={"email": "reset-me@example.com"},
+    )
+    assert reset_response.status_code == 200, reset_response.text
+    reset_payload = reset_response.json()
+    assert reset_payload["message"] == (
+        "If that email is registered, password reset instructions are on the way."
+    )
+    assert reset_payload["reset_token"]
+
+    confirm_response = client.post(
+        "/auth/password-reset/confirm",
+        json={
+            "token": reset_payload["reset_token"],
+            "password": "NewCorrectHorsePass!",
+        },
+    )
+    assert confirm_response.status_code == 200, confirm_response.text
+
+    old_login_response = client.post(
+        "/auth/login",
+        json={"email": "reset-me@example.com", "password": "OldCorrectHorsePass!"},
+    )
+    assert old_login_response.status_code == 401
+
+    new_login_response = client.post(
+        "/auth/login",
+        json={"email": "reset-me@example.com", "password": "NewCorrectHorsePass!"},
+    )
+    assert new_login_response.status_code == 200, new_login_response.text
+
+    replay_response = client.post(
+        "/auth/password-reset/confirm",
+        json={
+            "token": reset_payload["reset_token"],
+            "password": "AnotherCorrectHorsePass!",
+        },
+    )
+    assert replay_response.status_code == 400
+
+
+def test_password_reset_request_is_generic_for_unknown_email(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    response = client.post(
+        "/auth/password-reset/request",
+        json={"email": "missing@example.com"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["message"] == (
+        "If that email is registered, password reset instructions are on the way."
+    )
+    assert payload["reset_token"] is None
+
+
 def test_fallback_ai_contracts_without_openai(client: TestClient) -> None:
     _, headers = bootstrap_admin(client)
 
@@ -144,6 +246,37 @@ def test_protected_role_failure_is_clean(
     response = client.post("/auto-heal", headers=headers, json={})
     assert response.status_code == 403
     assert response.json()["detail"] == "Running Auto Heal requires one of these roles: Admin."
+
+
+def test_middleware_error_responses_include_cors_headers(client: TestClient) -> None:
+    origin = "http://127.0.0.1:3000"
+    response = client.get("/incidents/history", headers={"Origin": origin})
+
+    assert response.status_code == 401
+    assert response.headers["access-control-allow-origin"] == origin
+    assert response.headers["access-control-allow-credentials"] == "true"
+    assert response.json()["detail"] == "Authentication is required."
+
+
+def test_quota_errors_include_cors_headers(client: TestClient) -> None:
+    session_payload, headers = bootstrap_admin(client)
+    origin = "http://127.0.0.1:3000"
+    request_headers = {
+        **headers,
+        "Origin": origin,
+        "X-DevPilot-Team-ID": session_payload["current_team"]["id"],
+    }
+
+    for _ in range(5):
+        response = client.post("/auto-heal", headers=request_headers, json={})
+        assert response.status_code == 200, response.text
+
+    quota_response = client.post("/auto-heal", headers=request_headers, json={})
+
+    assert quota_response.status_code == 402
+    assert quota_response.headers["access-control-allow-origin"] == origin
+    assert quota_response.headers["access-control-allow-credentials"] == "true"
+    assert quota_response.json()["metric"] == "auto_heal_actions"
 
 
 def test_missing_external_credentials_return_clean_errors(

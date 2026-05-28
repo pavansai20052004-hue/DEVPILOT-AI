@@ -18,6 +18,22 @@ services:
         generateValue: true
       - key: AUTH_SESSION_TTL_SECONDS
         value: "2592000"
+      - key: AUTH_PASSWORD_RESET_TTL_SECONDS
+        value: "1800"
+      - key: AUTH_EXPOSE_PASSWORD_RESET_TOKEN
+        value: "false"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_USE_TLS
+        value: "true"
       # Add exact custom frontend origins here if you do not use the default platform domains.
       - key: FRONTEND_ORIGINS
         sync: false

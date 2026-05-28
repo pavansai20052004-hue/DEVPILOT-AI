@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock3,
   Download,
-  DollarSign,
   FileText,
   HeartPulse,
   ShieldCheck,
@@ -770,23 +769,34 @@ function BusinessImpactPanel({
   usingDemoData: boolean;
 }) {
   return (
-    <section id="business-impact" className="mt-8">
-      <div className="mb-5 flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
-        <div>
-          <p className="text-sm font-semibold uppercase text-amber-200">
-            Business Impact
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
-            ROI at a glance
-          </h2>
-        </div>
-        <div className="rounded-md border border-white/10 bg-[#0e1315] px-4 py-3 text-sm text-zinc-300">
-          {usingDemoData ? "Demo impact model" : "Live impact model"} /{" "}
-          {formatNumber(impact.autoHealed)} auto-healed incident(s)
+    <section id="business-impact" className="mt-6 grid gap-5 xl:grid-cols-[0.92fr_1.08fr]">
+      <div className="insight-panel p-6">
+        <div className="relative z-10 flex h-full flex-col justify-between gap-8">
+          <div>
+            <p className="text-sm font-semibold uppercase text-amber-200">
+              Business impact
+            </p>
+            <h2 className="font-display mt-3 text-4xl font-semibold leading-tight text-white sm:text-5xl">
+              {formatMoney(impact.moneySaved)}
+            </h2>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-300">
+              Revenue exposure and engineering time protected across{" "}
+              {formatNumber(impact.autoHealed)} auto-healed incident(s).
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="status-chip">
+              <span className="status-dot" />
+              {usingDemoData ? "Demo model" : "Live impact model"}
+            </span>
+            <span className="status-chip">
+              Protected SLA {formatPercent(impact.protectedSla)}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         <BusinessImpactMetric
           label="Downtime prevented"
           value={formatDuration(impact.downtimePreventedMinutes)}
@@ -795,13 +805,6 @@ function BusinessImpactPanel({
           )} minute(s) of customer impact avoided.`}
           icon={TimerReset}
           tone="border-cyan-300/30 bg-cyan-300/10 text-cyan-200"
-        />
-        <BusinessImpactMetric
-          label="Money saved"
-          value={formatMoney(impact.moneySaved)}
-          detail="Revenue exposure and engineering time protected."
-          icon={DollarSign}
-          tone="border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
         />
         <BusinessImpactMetric
           label="Engineer hours saved"
@@ -1309,23 +1312,54 @@ export function AnalyticsDashboard() {
 
   return (
     <div>
-      <header className="flex flex-col justify-between gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-end">
-        <div>
-          <p className="font-mono text-xs font-semibold uppercase tracking-normal text-emerald-200">
-            Incident Dashboard
-          </p>
-          <h1 className="mt-3 text-4xl font-semibold text-white sm:text-5xl">
-            Memory, trends, and recovery impact
-          </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-400">
-            DevPilot analyzes incident memory, auto-heal runs, and recent
-            signals so the team can see what happened and what time was saved.
-          </p>
-        </div>
+      <header className="insight-panel p-6">
+        <div className="relative z-10">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div>
+              <p className="text-sm font-semibold uppercase text-emerald-200">
+                Incident dashboard
+              </p>
+              <h1 className="font-display mt-3 max-w-4xl text-4xl font-semibold leading-tight text-white sm:text-5xl">
+                Memory, trends, and recovery impact
+              </h1>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-400">
+                DevPilot connects incident memory, auto-heal runs, and recent
+                signals into one executive-ready recovery view.
+              </p>
+            </div>
 
-        <div className="rounded-md border border-white/10 bg-[#0e1315] px-4 py-3 text-sm text-zinc-300">
-          <span className="mr-2 inline-block size-2 rounded-full bg-emerald-300" />
-          {isLoading ? "Loading memory" : usingDemoData ? "Demo analytics" : "Live memory"}
+            <div className="status-chip">
+              <span className="status-dot" />
+              {isLoading ? "Loading memory" : usingDemoData ? "Demo analytics" : "Live memory"}
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-md border border-white/10 bg-black/20 p-4">
+              <p className="text-xs font-semibold uppercase text-zinc-500">Signals</p>
+              <p className="mt-2 font-mono text-3xl font-semibold text-white">
+                {formatNumber(stats.incidentsDetected)}
+              </p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-black/20 p-4">
+              <p className="text-xs font-semibold uppercase text-zinc-500">Auto-healed</p>
+              <p className="mt-2 font-mono text-3xl font-semibold text-white">
+                {formatNumber(stats.autoHealed)}
+              </p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-black/20 p-4">
+              <p className="text-xs font-semibold uppercase text-zinc-500">Downtime saved</p>
+              <p className="mt-2 font-mono text-3xl font-semibold text-white">
+                {formatDuration(stats.downtimeSavedMinutes)}
+              </p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-black/20 p-4">
+              <p className="text-xs font-semibold uppercase text-zinc-500">Business value</p>
+              <p className="mt-2 font-mono text-3xl font-semibold text-white">
+                {formatMoney(businessImpact.moneySaved)}
+              </p>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -1346,6 +1380,11 @@ export function AnalyticsDashboard() {
         impact={businessImpact}
         usingDemoData={usingDemoData}
       />
+
+      <section className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+        <TrendChart data={stats.trend} />
+        <AutoHealGauge rate={stats.autoHealRate} />
+      </section>
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard
@@ -1384,11 +1423,6 @@ export function AnalyticsDashboard() {
         usingDemoData={usingDemoData}
         generatedAt={lastUpdated}
       />
-
-      <section className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-        <TrendChart data={stats.trend} />
-        <AutoHealGauge rate={stats.autoHealRate} />
-      </section>
 
       <section className="mt-5 grid gap-5 xl:grid-cols-[0.72fr_1.28fr]">
         <SourceBreakdownChart data={stats.sourceBreakdown} />

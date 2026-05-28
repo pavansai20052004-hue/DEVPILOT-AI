@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Activity } from "lucide-react";
 
 export function SectionPage({
   kicker,
@@ -13,26 +14,33 @@ export function SectionPage({
 }) {
   return (
     <div className="section-page">
-      <header className="border-b border-white/10 pb-6">
-        <p className="font-mono text-xs font-semibold uppercase tracking-normal text-emerald-200">
-          {kicker}
-        </p>
-        <div className="mt-3 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-          <div className="max-w-3xl">
-            <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">
+      <header className="insight-panel p-5 sm:p-6">
+        <div className="relative z-10">
+          <span className="premium-eyebrow">
+            <Activity className="size-3.5" aria-hidden="true" />
+            {kicker}
+          </span>
+        </div>
+        <div className="relative z-10 mt-5 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <div className="max-w-4xl">
+            <h1 className="font-display text-3xl font-semibold leading-tight text-white sm:text-4xl">
               {title}
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-400">
+            <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-300">
               {description}
             </p>
           </div>
-          <div className="rounded-md border border-white/10 bg-[#0e1315] px-4 py-3 font-mono text-xs uppercase text-zinc-500">
-            Connected DevOps workspace
+          <div className="flex flex-wrap gap-2 text-xs font-semibold text-zinc-300">
+            <span className="status-chip">
+              <span className="status-dot" />
+              Live workflow
+            </span>
+            <span className="status-chip">Approval-ready</span>
           </div>
         </div>
       </header>
 
-      <div className="section-page-content pt-6">{children}</div>
+      <div className="section-page-content pt-5">{children}</div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import secrets
+import smtplib
 import sqlite3
 import tempfile
 import threading
@@ -18,6 +19,7 @@ from dataclasses import dataclass
 from collections import deque
 from base64 import b64encode
 from datetime import UTC, datetime, timedelta
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.error import HTTPError, URLError
@@ -110,6 +112,9 @@ PUBLIC_PATHS = {
     "/auth/session",
     "/auth/bootstrap",
     "/auth/login",
+    "/auth/signup",
+    "/auth/password-reset/request",
+    "/auth/password-reset/confirm",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -128,6 +133,15 @@ CSRF_COOKIE_NAME = "devpilot_csrf"
 AUTH_SESSION_TTL_SECONDS_ENV = "AUTH_SESSION_TTL_SECONDS"
 DEFAULT_AUTH_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 DEFAULT_PASSWORD_ITERATIONS = 310_000
+AUTH_PASSWORD_RESET_TTL_SECONDS_ENV = "AUTH_PASSWORD_RESET_TTL_SECONDS"
+DEFAULT_AUTH_PASSWORD_RESET_TTL_SECONDS = 60 * 30
+AUTH_EXPOSE_PASSWORD_RESET_TOKEN_ENV = "AUTH_EXPOSE_PASSWORD_RESET_TOKEN"
+SMTP_HOST_ENV = "SMTP_HOST"
+SMTP_PORT_ENV = "SMTP_PORT"
+SMTP_USERNAME_ENV = "SMTP_USERNAME"
+SMTP_PASSWORD_ENV = "SMTP_PASSWORD"
+SMTP_FROM_EMAIL_ENV = "SMTP_FROM_EMAIL"
+SMTP_USE_TLS_ENV = "SMTP_USE_TLS"
 
 
 def normalize_frontend_origin(origin: str) -> str | None:
@@ -663,10 +677,26 @@ class AuthBootstrapRequest(BaseModel):
     team_name: str = Field(default="DevPilot Control Plane", min_length=2, max_length=120)
 
 
+class AuthSignupRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=12, max_length=128)
+    full_name: str | None = Field(default=None, max_length=120)
+    team_name: str = Field(default="My DevPilot Workspace", min_length=2, max_length=120)
+
+
 class AuthLoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=254)
     password: str = Field(..., min_length=12, max_length=128)
     team_id: str | None = Field(default=None, max_length=80)
+
+
+class AuthPasswordResetRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+
+
+class AuthPasswordResetConfirmRequest(BaseModel):
+    token: str = Field(..., min_length=32, max_length=256)
+    password: str = Field(..., min_length=12, max_length=128)
 
 
 class AuthSelectTeamRequest(BaseModel):
@@ -685,6 +715,13 @@ class AuthSessionResponse(BaseModel):
 
 class AuthLogoutResponse(BaseModel):
     message: str
+
+
+class AuthPasswordResetResponse(BaseModel):
+    message: str
+    reset_token: str | None = None
+    reset_url: str | None = None
+    expires_at: str | None = None
 
 
 class SaaSBootstrapResponse(BaseModel):
@@ -764,6 +801,48 @@ def auth_bootstrap(
         return session_response
 
 
+@app.post("/auth/signup", response_model=AuthSessionResponse)
+def auth_signup(
+    payload: AuthSignupRequest,
+    request: Request,
+    response: Response,
+) -> AuthSessionResponse:
+    email = normalize_owner_email(payload.email)
+    if auth_user_row_by_email(email):
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this email already exists. Sign in instead.",
+        )
+
+    user_row = create_auth_user_if_missing(
+        email=email,
+        password=payload.password,
+        full_name=payload.full_name,
+    )
+    team = create_saas_team(
+        TeamCreateRequest(
+            name=payload.team_name,
+            owner_email=email,
+            plan_id="free",
+        ),
+    )
+    touch_auth_user_login(str(user_row["id"]), datetime.now(UTC).isoformat())
+    _, session_token, csrf_token = create_auth_session_record(
+        user_id=str(user_row["id"]),
+        team_id=team.id,
+        request=request,
+    )
+    session_response = build_auth_session_response(
+        authenticated=True,
+        user_row=user_row,
+        team_row=model_to_dict(team),
+        team_rows=auth_user_team_rows(email),
+        csrf_token=csrf_token,
+    )
+    set_auth_cookies(response, session_token, csrf_token)
+    return session_response
+
+
 @app.post("/auth/login", response_model=AuthSessionResponse)
 def auth_login(
     payload: AuthLoginRequest,
@@ -806,6 +885,60 @@ def auth_login(
     )
     set_auth_cookies(response, session_token, csrf_token)
     return session_response
+
+
+@app.post("/auth/password-reset/request", response_model=AuthPasswordResetResponse)
+def auth_password_reset_request(
+    payload: AuthPasswordResetRequest,
+    request: Request,
+) -> AuthPasswordResetResponse:
+    email = normalize_owner_email(payload.email)
+    generic_message = (
+        "If that email is registered, password reset instructions are on the way."
+    )
+    user_row = auth_user_row_by_email(email)
+    reset_token: str | None = None
+    expires_at: str | None = None
+
+    if user_row and int(user_row.get("is_active") or 0):
+        reset_token, expires_at = create_password_reset_token(
+            user_id=str(user_row["id"]),
+            email=email,
+            request=request,
+        )
+        reset_url = build_password_reset_url(request, reset_token)
+        send_password_reset_email(email=email, reset_url=reset_url)
+
+        if should_expose_password_reset_token():
+            return AuthPasswordResetResponse(
+                message=generic_message,
+                reset_token=reset_token,
+                reset_url=reset_url,
+                expires_at=expires_at,
+            )
+
+    return AuthPasswordResetResponse(message=generic_message)
+
+
+@app.post("/auth/password-reset/confirm", response_model=AuthPasswordResetResponse)
+def auth_password_reset_confirm(
+    payload: AuthPasswordResetConfirmRequest,
+) -> AuthPasswordResetResponse:
+    reset_row = password_reset_row_for_token(payload.token)
+    if reset_row is None:
+        raise HTTPException(status_code=400, detail="Reset link is invalid or expired.")
+
+    user_row = auth_user_row_by_id(str(reset_row["user_id"]))
+    if user_row is None or not int(user_row.get("is_active") or 0):
+        raise HTTPException(status_code=400, detail="Reset link is invalid or expired.")
+
+    update_auth_user_password(str(user_row["id"]), payload.password)
+    mark_password_reset_token_used(str(reset_row["id"]))
+    revoke_auth_sessions_for_user(str(user_row["id"]))
+
+    return AuthPasswordResetResponse(
+        message="Password updated. Sign in with your new password.",
+    )
 
 
 @app.post("/auth/select-team", response_model=AuthSessionResponse)
@@ -2462,6 +2595,18 @@ def is_public_path(path: str) -> bool:
     return path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES)
 
 
+def unauthenticated_request_context() -> RequestAuthContext:
+    return RequestAuthContext(
+        authenticated=False,
+        user_id=None,
+        user_email=None,
+        team_id=DEFAULT_SAAS_TEAM_ID,
+        role="viewer",
+        session_id=None,
+        csrf_token=None,
+    )
+
+
 def current_user_id() -> str | None:
     return CURRENT_USER_ID.get()
 
@@ -2483,33 +2628,18 @@ def current_authentication_status() -> bool:
 
 
 def resolve_request_auth_context(request: Request) -> RequestAuthContext:
+    public_path = is_public_path(request.url.path)
     token = auth_token_from_request(request)
     if not token:
-        if is_public_path(request.url.path):
-            return RequestAuthContext(
-                authenticated=False,
-                user_id=None,
-                user_email=None,
-                team_id=DEFAULT_SAAS_TEAM_ID,
-                role="viewer",
-                session_id=None,
-                csrf_token=None,
-            )
+        if public_path:
+            return unauthenticated_request_context()
 
         raise HTTPException(status_code=401, detail="Authentication is required.")
 
     payload = verify_session_token(token)
     if not payload:
-        if is_public_path(request.url.path):
-            return RequestAuthContext(
-                authenticated=False,
-                user_id=None,
-                user_email=None,
-                team_id=DEFAULT_SAAS_TEAM_ID,
-                role="viewer",
-                session_id=None,
-                csrf_token=None,
-            )
+        if public_path:
+            return unauthenticated_request_context()
 
         raise HTTPException(
             status_code=401,
@@ -2520,6 +2650,9 @@ def resolve_request_auth_context(request: Request) -> RequestAuthContext:
     user_id = str(payload.get("uid") or "").strip()
     csrf_token = str(payload.get("csrf") or "").strip()
     if not session_id or not user_id or not csrf_token:
+        if public_path:
+            return unauthenticated_request_context()
+
         raise HTTPException(
             status_code=401,
             detail="Your session is malformed. Please sign in again.",
@@ -2527,6 +2660,9 @@ def resolve_request_auth_context(request: Request) -> RequestAuthContext:
 
     session_row = auth_session_row_by_id(session_id)
     if not session_row or session_row.get("revoked_at"):
+        if public_path:
+            return unauthenticated_request_context()
+
         raise HTTPException(
             status_code=401,
             detail="Your session is no longer valid. Please sign in again.",
@@ -2535,11 +2671,17 @@ def resolve_request_auth_context(request: Request) -> RequestAuthContext:
     expires_at_raw = str(session_row.get("expires_at") or payload.get("exp") or "")
     try:
         if datetime.fromisoformat(expires_at_raw) <= datetime.now(UTC):
+            if public_path:
+                return unauthenticated_request_context()
+
             raise HTTPException(
                 status_code=401,
                 detail="Your session expired. Please sign in again.",
             )
     except ValueError as exc:
+        if public_path:
+            return unauthenticated_request_context()
+
         raise HTTPException(
             status_code=401,
             detail="Your session is invalid. Please sign in again.",
@@ -2547,6 +2689,9 @@ def resolve_request_auth_context(request: Request) -> RequestAuthContext:
 
     user_row = auth_user_row_by_id(user_id)
     if not user_row or not int(user_row.get("is_active") or 0):
+        if public_path:
+            return unauthenticated_request_context()
+
         raise HTTPException(status_code=401, detail="Your account is inactive.")
 
     email = str(user_row["email"]).lower().strip()
@@ -2571,7 +2716,7 @@ def resolve_request_auth_context(request: Request) -> RequestAuthContext:
             selected_team_id = str(user_teams[0]["id"])
             if selected_team_id != session_team_id:
                 update_auth_session_team(session_id, selected_team_id)
-        elif not is_public_path(request.url.path):
+        elif not public_path:
             raise HTTPException(
                 status_code=403,
                 detail="You are not a member of any team in this workspace.",
@@ -2583,7 +2728,7 @@ def resolve_request_auth_context(request: Request) -> RequestAuthContext:
 
     member_row = team_member_row_for_email(selected_team_id, email)
     if member_row is None:
-        if is_public_path(request.url.path):
+        if public_path:
             return RequestAuthContext(
                 authenticated=False,
                 user_id=None,
@@ -3375,6 +3520,39 @@ def _initialize_storage_schema(connection: StorageConnectionProxy) -> None:
         ON auth_sessions (revoked_at)
         """,
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS auth_password_reset_tokens (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            email TEXT NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            user_agent TEXT,
+            ip_address TEXT
+        )
+        """,
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_auth_password_reset_tokens_user_id
+        ON auth_password_reset_tokens (user_id)
+        """,
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_auth_password_reset_tokens_expires_at
+        ON auth_password_reset_tokens (expires_at)
+        """,
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_auth_password_reset_tokens_used_at
+        ON auth_password_reset_tokens (used_at)
+        """,
+    )
 
 
 def init_incident_db() -> None:
@@ -3645,6 +3823,219 @@ def revoke_auth_session(session_id: str) -> None:
             """,
             (revoked_at, session_id),
         )
+
+
+def password_reset_ttl_seconds() -> int:
+    configured = os.getenv(AUTH_PASSWORD_RESET_TTL_SECONDS_ENV, "").strip()
+    if not configured:
+        return DEFAULT_AUTH_PASSWORD_RESET_TTL_SECONDS
+
+    try:
+        ttl = int(configured)
+    except ValueError:
+        return DEFAULT_AUTH_PASSWORD_RESET_TTL_SECONDS
+
+    return max(300, min(ttl, 60 * 60 * 24))
+
+
+def should_expose_password_reset_token() -> bool:
+    configured = os.getenv(AUTH_EXPOSE_PASSWORD_RESET_TOKEN_ENV, "").strip().lower()
+    if configured in {"1", "true", "yes", "on"}:
+        return True
+    if configured in {"0", "false", "no", "off"}:
+        return False
+
+    return not is_production_environment()
+
+
+def password_reset_token_hash(token: str) -> str:
+    digest = hmac.new(
+        session_secret().encode("utf-8"),
+        token.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    return base64url_encode(digest)
+
+
+def create_password_reset_token(
+    *,
+    user_id: str,
+    email: str,
+    request: Request | None = None,
+) -> tuple[str, str]:
+    token = secrets.token_urlsafe(48)
+    token_hash = password_reset_token_hash(token)
+    created_at = datetime.now(UTC)
+    expires_at = created_at + timedelta(seconds=password_reset_ttl_seconds())
+    user_agent = request.headers.get("user-agent") if request else None
+    ip_address = request_client_ip(request) if request else None
+
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO auth_password_reset_tokens (
+                id, user_id, email, token_hash, created_at, expires_at,
+                used_at, user_agent, ip_address
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid4()),
+                user_id,
+                email.lower().strip(),
+                token_hash,
+                created_at.isoformat(),
+                expires_at.isoformat(),
+                None,
+                user_agent,
+                ip_address,
+            ),
+        )
+
+    return token, expires_at.isoformat()
+
+
+def password_reset_row_for_token(token: str) -> dict[str, Any] | None:
+    token_hash = password_reset_token_hash(token)
+    with incident_db_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, user_id, email, token_hash, created_at, expires_at, used_at
+            FROM auth_password_reset_tokens
+            WHERE token_hash = ?
+            LIMIT 1
+            """,
+            (token_hash,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    reset_row = dict(row)
+    if reset_row.get("used_at"):
+        return None
+
+    try:
+        if datetime.fromisoformat(str(reset_row["expires_at"])) <= datetime.now(UTC):
+            return None
+    except ValueError:
+        return None
+
+    return reset_row
+
+
+def mark_password_reset_token_used(reset_token_id: str) -> None:
+    used_at = datetime.now(UTC).isoformat()
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE auth_password_reset_tokens
+            SET used_at = ?
+            WHERE id = ?
+            """,
+            (used_at, reset_token_id),
+        )
+
+
+def update_auth_user_password(user_id: str, password: str) -> None:
+    updated_at = datetime.now(UTC).isoformat()
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE auth_users
+            SET password_hash = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (hash_password(password), updated_at, user_id),
+        )
+
+
+def revoke_auth_sessions_for_user(user_id: str) -> None:
+    revoked_at = datetime.now(UTC).isoformat()
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE auth_sessions
+            SET revoked_at = ?
+            WHERE user_id = ? AND revoked_at IS NULL
+            """,
+            (revoked_at, user_id),
+        )
+
+
+def frontend_base_url_from_request(request: Request) -> str:
+    origin = request.headers.get("origin", "").strip()
+    if origin and is_allowed_cors_origin(origin):
+        normalized = normalize_frontend_origin(origin)
+        if normalized:
+            return normalized
+
+    configured_origins = get_configured_frontend_origins()
+    if configured_origins:
+        return configured_origins[0]
+
+    return "http://127.0.0.1:3000"
+
+
+def build_password_reset_url(request: Request, token: str) -> str:
+    return f"{frontend_base_url_from_request(request)}/dashboard?reset_token={quote(token)}"
+
+
+def smtp_is_configured() -> bool:
+    return bool(os.getenv(SMTP_HOST_ENV, "").strip() and os.getenv(SMTP_FROM_EMAIL_ENV, "").strip())
+
+
+def smtp_port() -> int:
+    configured = os.getenv(SMTP_PORT_ENV, "587").strip()
+    try:
+        return int(configured)
+    except ValueError:
+        return 587
+
+
+def smtp_use_tls() -> bool:
+    return os.getenv(SMTP_USE_TLS_ENV, "true").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def send_password_reset_email(*, email: str, reset_url: str) -> None:
+    if not smtp_is_configured():
+        logger.info(
+            "SMTP is not configured; password reset email for %s was not sent.",
+            email,
+        )
+        return
+
+    message = EmailMessage()
+    message["Subject"] = "Reset your DevPilot AI password"
+    message["From"] = os.getenv(SMTP_FROM_EMAIL_ENV, "").strip()
+    message["To"] = email
+    message.set_content(
+        "\n".join(
+            [
+                "Use this link to reset your DevPilot AI password:",
+                reset_url,
+                "",
+                "This link expires soon. If you did not request it, you can ignore this email.",
+            ],
+        ),
+    )
+
+    username = os.getenv(SMTP_USERNAME_ENV, "").strip()
+    password = os.getenv(SMTP_PASSWORD_ENV, "").strip()
+    try:
+        with smtplib.SMTP(os.getenv(SMTP_HOST_ENV, "").strip(), smtp_port(), timeout=10) as smtp:
+            if smtp_use_tls():
+                smtp.starttls()
+            if username:
+                smtp.login(username, password)
+            smtp.send_message(message)
+    except Exception:
+        logger.exception("Could not send password reset email to %s.", email)
 
 
 def slack_webhook_url(required: bool = False) -> str | None:
