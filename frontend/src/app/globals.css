@@ -344,30 +344,29 @@ h3,
 
 .glitch-title {
   position: relative;
+  display: inline-block;
   letter-spacing: 0;
   text-shadow:
     0 0 24px rgba(88, 166, 255, 0.34),
     0 0 64px rgba(63, 185, 80, 0.18);
 }
 
-.glitch-title::before,
-.glitch-title::after {
+.glitch-title__layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  content: attr(data-text);
   opacity: 0.52;
   mix-blend-mode: screen;
 }
 
-.glitch-title::before {
+.glitch-title__layer--blue {
   color: #58a6ff;
   transform: translate(2px, -1px);
   clip-path: inset(0 0 58% 0);
   animation: glitch-slice 3.1s steps(2, end) infinite;
 }
 
-.glitch-title::after {
+.glitch-title__layer--green {
   color: #3fb950;
   transform: translate(-2px, 1px);
   clip-path: inset(48% 0 0 0);
@@ -492,8 +491,7 @@ h3,
 @media (prefers-reduced-motion: reduce) {
   .cinematic-grid,
   .cinematic-scanline,
-  .glitch-title::before,
-  .glitch-title::after,
+  .glitch-title__layer,
   .terminal-cursor,
   .network-globe::before,
   .auto-heal-button {

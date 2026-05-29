@@ -401,6 +401,8 @@ function AuthTextInput({
   onChange,
   placeholder,
   type = "text",
+  autoComplete,
+  name,
   required = true,
   minLength,
 }: {
@@ -409,6 +411,8 @@ function AuthTextInput({
   onChange: (value: string) => void;
   placeholder: string;
   type?: string;
+  autoComplete?: string;
+  name?: string;
   required?: boolean;
   minLength?: number;
 }) {
@@ -417,10 +421,12 @@ function AuthTextInput({
       <span>{label}</span>
       <input
         type={type}
+        name={name}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="premium-input h-11 rounded-md px-3 text-sm font-medium transition"
         placeholder={placeholder}
+        autoComplete={autoComplete}
         minLength={minLength}
         required={required}
       />
@@ -433,12 +439,14 @@ function PasswordInput({
   value,
   onChange,
   placeholder,
+  autoComplete,
   required = true,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  autoComplete?: string;
   required?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
@@ -453,6 +461,7 @@ function PasswordInput({
           onChange={(event) => onChange(event.target.value)}
           className="premium-input h-11 w-full rounded-md px-3 pr-11 text-sm font-medium transition"
           placeholder={placeholder}
+          autoComplete={autoComplete}
           minLength={12}
           required={required}
         />
@@ -765,6 +774,8 @@ function AuthForm({
                 value={resetToken}
                 onChange={setResetToken}
                 placeholder="Paste the reset token"
+                autoComplete="one-time-code"
+                name="reset-token"
               />
             ) : null}
 
@@ -775,6 +786,8 @@ function AuthForm({
                 onChange={setEmail}
                 placeholder="you@company.com"
                 type="email"
+                autoComplete="email"
+                name="email"
               />
             ) : null}
 
@@ -785,6 +798,8 @@ function AuthForm({
                   value={fullName}
                   onChange={setFullName}
                   placeholder="Pavan Sai"
+                  autoComplete="name"
+                  name="name"
                   required={false}
                 />
                 <AuthTextInput
@@ -792,6 +807,8 @@ function AuthForm({
                   value={teamName}
                   onChange={setTeamName}
                   placeholder="Acme DevOps"
+                  autoComplete="organization"
+                  name="organization"
                 />
               </>
             ) : null}
@@ -803,6 +820,7 @@ function AuthForm({
                   value={password}
                   onChange={setPassword}
                   placeholder="12+ characters"
+                  autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
                 />
                 {mode === "sign-up" || mode === "bootstrap" || mode === "reset" ? (
                   <PasswordInput
@@ -810,6 +828,7 @@ function AuthForm({
                     value={confirmPassword}
                     onChange={setConfirmPassword}
                     placeholder="Repeat password"
+                    autoComplete="new-password"
                   />
                 ) : null}
                 <p className="-mt-2 text-xs text-zinc-500">

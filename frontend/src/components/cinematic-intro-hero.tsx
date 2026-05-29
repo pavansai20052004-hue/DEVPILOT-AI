@@ -47,7 +47,6 @@ export function HeroBootPanel({
           </motion.p>
           <motion.h1
             className="glitch-title mt-4 text-5xl font-black leading-none text-white sm:text-6xl lg:text-7xl xl:whitespace-nowrap"
-            data-text="DevPilot AI"
             initial={{ opacity: 0, filter: "blur(16px)", scale: 0.96 }}
             animate={{
               opacity: currentStageIndex >= stageIndex("brand") ? 1 : 0.34,
@@ -59,7 +58,13 @@ export function HeroBootPanel({
             }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            DevPilot AI
+            <span className="relative z-10">DevPilot AI</span>
+            <span aria-hidden="true" className="glitch-title__layer glitch-title__layer--blue">
+              DevPilot AI
+            </span>
+            <span aria-hidden="true" className="glitch-title__layer glitch-title__layer--green">
+              DevPilot AI
+            </span>
           </motion.h1>
           <motion.p
             className="mt-4 max-w-3xl text-2xl font-semibold leading-tight text-[#C9D1D9] sm:text-3xl"
