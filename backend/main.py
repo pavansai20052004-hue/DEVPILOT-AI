@@ -1397,10 +1397,16 @@ class DemoRunResponse(BaseModel):
 AutonomousAgentMode = Literal["simulation", "kubernetes"]
 DevPilotAgentId = Literal[
     "monitoring",
+    "bug_sentinel",
+    "frontend_guardian",
+    "backend_guardian",
+    "database_guardian",
+    "ui_monitor",
     "root_cause",
     "fix_generator",
     "auto_heal",
     "security",
+    "release_auditor",
 ]
 DevPilotAgentState = Literal["waiting", "active", "completed", "blocked"]
 AutonomousActionStatus = Literal[
@@ -2052,16 +2058,47 @@ AUTONOMOUS_SOURCE_PRIORITY = {
 }
 DEV_PILOT_AGENT_ORDER: list[DevPilotAgentId] = [
     "monitoring",
+    "bug_sentinel",
+    "frontend_guardian",
+    "backend_guardian",
+    "database_guardian",
+    "ui_monitor",
     "root_cause",
     "fix_generator",
-    "auto_heal",
     "security",
+    "release_auditor",
+    "auto_heal",
 ]
 DEV_PILOT_AGENT_PROFILES: dict[DevPilotAgentId, dict[str, str | None]] = {
     "monitoring": {
         "name": "Monitoring Agent",
         "mission": "Watches logs, deploy events, Kubernetes health, and chaos signals.",
-        "handoff_to": "Root Cause Agent",
+        "handoff_to": "Bug Sentinel Agent",
+    },
+    "bug_sentinel": {
+        "name": "Bug Sentinel Agent",
+        "mission": "Finds runtime errors, failed checks, broken buttons, and bug hotspots.",
+        "handoff_to": "Frontend Guardian Agent",
+    },
+    "frontend_guardian": {
+        "name": "Frontend Guardian Agent",
+        "mission": "Audits Next.js routes, forms, responsive states, and client-side failures.",
+        "handoff_to": "UI Monitor Agent",
+    },
+    "backend_guardian": {
+        "name": "Backend Guardian Agent",
+        "mission": "Validates FastAPI contracts, auth flows, reset flows, and API failures.",
+        "handoff_to": "Database Guardian Agent",
+    },
+    "database_guardian": {
+        "name": "Database Guardian Agent",
+        "mission": "Checks SQLite/Postgres readiness, Neon DATABASE_URL, and tenant isolation.",
+        "handoff_to": "Release Auditor Agent",
+    },
+    "ui_monitor": {
+        "name": "Full UI Monitor Agent",
+        "mission": "Walks every visible section and button to catch broken demo interactions.",
+        "handoff_to": "Release Auditor Agent",
     },
     "root_cause": {
         "name": "Root Cause Agent",
@@ -2081,6 +2118,11 @@ DEV_PILOT_AGENT_PROFILES: dict[DevPilotAgentId, dict[str, str | None]] = {
     "security": {
         "name": "Security Agent",
         "mission": "Checks remediation for secrets, risky YAML, and unsafe release settings.",
+        "handoff_to": "Release Auditor Agent",
+    },
+    "release_auditor": {
+        "name": "Release Auditor Agent",
+        "mission": "Finds pending GitHub, Vercel, Render, OpenAI, Twilio, and production gaps.",
         "handoff_to": "Auto Heal Agent",
     },
 }
@@ -2089,11 +2131,14 @@ DEV_PILOT_AGENT_ACTION_MAP: dict[str, DevPilotAgentId] = {
     "approval_approved": "auto_heal",
     "approval_rejected": "auto_heal",
     "approval_requested": "auto_heal",
+    "audit_frontend_routes": "frontend_guardian",
+    "audit_pending_work": "release_auditor",
     "chaos_detected": "root_cause",
     "chaos_injection": "monitoring",
     "chaos_recovered": "auto_heal",
     "configure_agent": "monitoring",
     "decide_remediation": "root_cause",
+    "monitor_ui_sections": "ui_monitor",
     "generate_remediation": "fix_generator",
     "monitor_incidents": "monitoring",
     "monitor_kubernetes": "monitoring",
@@ -2102,9 +2147,12 @@ DEV_PILOT_AGENT_ACTION_MAP: dict[str, DevPilotAgentId] = {
     "remediation_completed": "auto_heal",
     "restart_failed_pod": "auto_heal",
     "restore_network_policy": "auto_heal",
+    "scan_error_backlog": "bug_sentinel",
     "rollback_deployment": "auto_heal",
     "security_scan": "security",
     "security_review": "security",
+    "validate_backend_contracts": "backend_guardian",
+    "verify_database_storage": "database_guardian",
     "validate_release_gate": "auto_heal",
     "validate_service_path": "auto_heal",
 }
@@ -5450,9 +5498,51 @@ def build_agent_handoffs(
     handoff_specs = [
         (
             "Monitoring Agent",
+            "Bug Sentinel Agent",
+            "Monitoring handed raw runtime, CI/CD, and infrastructure signals to bug triage.",
+            ("monitoring", "bug_sentinel"),
+        ),
+        (
+            "Bug Sentinel Agent",
+            "Frontend Guardian Agent",
+            "Bug triage handed browser, button, and route concerns to the frontend auditor.",
+            ("bug_sentinel", "frontend_guardian"),
+        ),
+        (
+            "Bug Sentinel Agent",
+            "Backend Guardian Agent",
+            "Bug triage handed API and auth concerns to the backend auditor.",
+            ("bug_sentinel", "backend_guardian"),
+        ),
+        (
+            "Frontend Guardian Agent",
+            "Full UI Monitor Agent",
+            "Frontend checks were expanded into full-section interaction monitoring.",
+            ("frontend_guardian", "ui_monitor"),
+        ),
+        (
+            "Backend Guardian Agent",
+            "Database Guardian Agent",
+            "Backend contracts were checked against storage and account isolation readiness.",
+            ("backend_guardian", "database_guardian"),
+        ),
+        (
+            "Database Guardian Agent",
+            "Release Auditor Agent",
+            "Database readiness was handed to release validation for production gaps.",
+            ("database_guardian", "release_auditor"),
+        ),
+        (
+            "Full UI Monitor Agent",
+            "Release Auditor Agent",
+            "UI coverage was handed to release validation for final pending-work checks.",
+            ("ui_monitor", "release_auditor"),
+        ),
+        (
+            "Release Auditor Agent",
             "Root Cause Agent",
-            "Monitoring handed correlated runtime and delivery signals to diagnosis.",
-            ("monitoring", "root_cause"),
+            "Release audit handed verified product gaps and deployment signals to diagnosis.",
+            ("release_auditor", "root_cause"),
         ),
         (
             "Root Cause Agent",
@@ -5474,9 +5564,15 @@ def build_agent_handoffs(
         ),
         (
             "Security Agent",
+            "Release Auditor Agent",
+            "Security review handed remediation risk status back into the release gate.",
+            ("security", "release_auditor"),
+        ),
+        (
+            "Release Auditor Agent",
             "Auto Heal Agent",
-            "Security review cleared safe-mode remediation to proceed.",
-            ("security", "auto_heal"),
+            "Release validation cleared safe-mode remediation to proceed.",
+            ("release_auditor", "auto_heal"),
         ),
     ]
 
@@ -10856,6 +10952,81 @@ def create_collaboration_drill_incident(created_at: str) -> dict[str, Any]:
     return row
 
 
+def log_specialist_readiness_actions(
+    *,
+    cycle_id: str,
+    incident_id: str,
+    trigger: str,
+) -> None:
+    specialist_actions: list[tuple[str, str, AutonomousActionStatus, str]] = [
+        (
+            "scan_error_backlog",
+            "bugs/regression-hotspots",
+            "observed",
+            (
+                "Bug Sentinel Agent scanned runtime errors, failed checks, "
+                "broken-button reports, and demo blockers."
+            ),
+        ),
+        (
+            "audit_frontend_routes",
+            "frontend/routes-forms-responsive-states",
+            "completed",
+            (
+                "Frontend Guardian Agent audited routes, forms, responsive "
+                "layouts, client-side fetches, and visible error states."
+            ),
+        ),
+        (
+            "validate_backend_contracts",
+            "backend/auth-api-integrations",
+            "completed",
+            (
+                "Backend Guardian Agent validated API contracts, separate "
+                "account signup, login, forgot-password reset, and role gates."
+            ),
+        ),
+        (
+            "verify_database_storage",
+            "database/sqlite-postgres-neon-readiness",
+            "completed",
+            (
+                "Database Guardian Agent checked storage readiness, Postgres "
+                "compatibility, Neon DATABASE_URL expectations, and tenant isolation."
+            ),
+        ),
+        (
+            "monitor_ui_sections",
+            "ui/all-product-sections-and-buttons",
+            "completed",
+            (
+                "Full UI Monitor Agent swept every major product section and "
+                "button path for demo-breaking issues."
+            ),
+        ),
+        (
+            "audit_pending_work",
+            "release/github-vercel-render-openai-twilio",
+            "completed",
+            (
+                "Release Auditor Agent checked pending work across GitHub, "
+                "Vercel production, Render backend configuration, OpenAI, "
+                "Twilio email readiness, and release notes."
+            ),
+        ),
+    ]
+
+    for action_type, target, status, detail in specialist_actions:
+        log_autonomous_action(
+            cycle_id=cycle_id,
+            incident_id=incident_id,
+            action_type=action_type,
+            target=f"{trigger}:{target}",
+            status=status,
+            detail=detail,
+        )
+
+
 def run_multi_agent_collaboration(
     trigger: str = "manual-collaboration",
 ) -> AutonomousAgentDecision:
@@ -10876,6 +11047,11 @@ def run_multi_agent_collaboration(
             "Monitoring Agent correlated Kubernetes, CI/CD, and latency signals "
             "for the specialist team."
         ),
+    )
+    log_specialist_readiness_actions(
+        cycle_id=cycle_id,
+        incident_id=incident_id,
+        trigger=trigger,
     )
     log_autonomous_action(
         cycle_id=cycle_id,

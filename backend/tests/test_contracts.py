@@ -198,6 +198,45 @@ def test_password_reset_request_is_generic_for_unknown_email(client: TestClient)
     assert payload["reset_token"] is None
 
 
+def test_agent_collaboration_assigns_specialist_readiness_agents(
+    client: TestClient,
+) -> None:
+    _, headers = bootstrap_admin(client)
+
+    response = client.post("/agents/collaborate", headers=headers, json={})
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    agent_names = {agent["name"] for agent in payload["agents"]}
+    assert {
+        "Bug Sentinel Agent",
+        "Frontend Guardian Agent",
+        "Backend Guardian Agent",
+        "Database Guardian Agent",
+        "Full UI Monitor Agent",
+        "Release Auditor Agent",
+    }.issubset(agent_names)
+
+    action_types = {action["action_type"] for action in payload["recent_actions"]}
+    assert {
+        "scan_error_backlog",
+        "audit_frontend_routes",
+        "validate_backend_contracts",
+        "verify_database_storage",
+        "monitor_ui_sections",
+        "audit_pending_work",
+    }.issubset(action_types)
+
+    completed_handoffs = {
+        (handoff["from_agent"], handoff["to_agent"])
+        for handoff in payload["handoffs"]
+        if handoff["status"] == "completed"
+    }
+    assert ("Bug Sentinel Agent", "Frontend Guardian Agent") in completed_handoffs
+    assert ("Backend Guardian Agent", "Database Guardian Agent") in completed_handoffs
+    assert ("Full UI Monitor Agent", "Release Auditor Agent") in completed_handoffs
+
+
 def test_fallback_ai_contracts_without_openai(client: TestClient) -> None:
     _, headers = bootstrap_admin(client)
 

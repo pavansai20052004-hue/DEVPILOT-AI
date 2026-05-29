@@ -92,8 +92,8 @@ export function DemoRunButton({
   }
 
   const buttonClassName = isHeader
-    ? "inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-lime-300/40 bg-lime-300 px-4 text-sm font-semibold text-zinc-950 shadow-[0_0_24px_rgba(190,242,100,0.16)] transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:opacity-60"
-    : "inline-flex h-12 items-center justify-center gap-2 rounded-md border border-lime-300/40 bg-lime-300 px-5 text-sm font-semibold text-zinc-950 shadow-[0_0_24px_rgba(190,242,100,0.16)] transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:opacity-60";
+    ? "premium-button inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+    : "premium-button inline-flex h-12 items-center justify-center gap-2 rounded-md px-5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60";
 
   return (
     <div className={isHeader ? "flex flex-col items-end gap-2" : "grid gap-3"}>

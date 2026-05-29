@@ -140,8 +140,8 @@ export function JudgeModeButton({
   }
 
   const buttonClassName = isHeader
-    ? "inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-cyan-300/40 bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 shadow-[0_0_24px_rgba(103,232,249,0.16)] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
-    : "inline-flex h-12 items-center justify-center gap-2 rounded-md border border-cyan-300/40 bg-cyan-300 px-5 text-sm font-semibold text-zinc-950 shadow-[0_0_24px_rgba(103,232,249,0.16)] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60";
+    ? "inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-cyan-300/45 bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 shadow-[0_12px_30px_rgba(125,211,252,0.14)] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+    : "inline-flex h-12 items-center justify-center gap-2 rounded-md border border-cyan-300/45 bg-cyan-300 px-5 text-sm font-semibold text-zinc-950 shadow-[0_12px_30px_rgba(125,211,252,0.14)] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60";
 
   return (
     <div className={isHeader ? "flex flex-col items-end gap-2" : "grid gap-4"}>

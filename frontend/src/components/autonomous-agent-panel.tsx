@@ -5,13 +5,18 @@ import {
   Activity,
   AlertCircle,
   Bot,
+  Bug,
   CheckCircle2,
   Clock3,
+  Database,
   FileCode2,
+  ListChecks,
   Lock,
   Loader2,
+  MonitorCheck,
   Radar,
   RotateCw,
+  ServerCog,
   ShieldCheck,
   Undo2,
   UserCheck,
@@ -25,10 +30,16 @@ import { API_BASE_URL } from "@/lib/api-client";
 
 type DevPilotAgentId =
   | "monitoring"
+  | "bug_sentinel"
+  | "frontend_guardian"
+  | "backend_guardian"
+  | "database_guardian"
+  | "ui_monitor"
   | "root_cause"
   | "fix_generator"
   | "auto_heal"
-  | "security";
+  | "security"
+  | "release_auditor";
 
 type DevPilotAgentState = "waiting" | "active" | "completed" | "blocked";
 
@@ -142,23 +153,35 @@ const actionIcons = {
   approval_requested: UserCheck,
   approval_approved: CheckCircle2,
   approval_rejected: XCircle,
+  audit_frontend_routes: MonitorCheck,
+  audit_pending_work: ListChecks,
   chaos_injection: AlertCircle,
   chaos_detected: Activity,
   chaos_recovered: ShieldCheck,
+  monitor_ui_sections: Radar,
   restore_network_policy: Wrench,
   patch_ci_workflow: FileCode2,
   security_scan: ShieldCheck,
   security_review: ShieldCheck,
+  scan_error_backlog: Bug,
+  validate_backend_contracts: ServerCog,
+  verify_database_storage: Database,
   validate_release_gate: ShieldCheck,
   validate_service_path: ShieldCheck,
 };
 
 const agentIcons: Record<DevPilotAgentId, typeof Activity> = {
   monitoring: Radar,
+  bug_sentinel: Bug,
+  frontend_guardian: MonitorCheck,
+  backend_guardian: ServerCog,
+  database_guardian: Database,
+  ui_monitor: Radar,
   root_cause: Bot,
   fix_generator: FileCode2,
   auto_heal: Wrench,
   security: ShieldCheck,
+  release_auditor: ListChecks,
 };
 
 const statusClasses: Record<AutonomousActionStatus, string> = {
@@ -342,7 +365,7 @@ export function AutonomousAgentPanel() {
 
   const currentDecision = status?.last_decision;
   const visibleActions = useMemo(
-    () => status?.recent_actions.slice(0, 8) ?? [],
+    () => status?.recent_actions.slice(0, 12) ?? [],
     [status?.recent_actions],
   );
   const visibleApprovals = status?.pending_approvals ?? [];
@@ -357,11 +380,12 @@ export function AutonomousAgentPanel() {
             Autonomous Agent
           </p>
           <h2 className="mt-3 max-w-xl text-3xl font-semibold text-white sm:text-4xl">
-            Suggests fixes, then waits for human approval.
+            Specialist agents audit, fix, and verify the full product.
           </h2>
           <p className="mt-5 max-w-xl text-base leading-7 text-zinc-400">
-            DevPilot now runs as specialist agents that watch, diagnose, generate
-            fixes, check security, and apply recovery only after approval.
+            DevPilot now assigns focused agents for bugs, frontend, backend,
+            database, full UI monitoring, release gaps, security, and auto-heal
+            execution with human approval.
           </p>
 
           <div className="mt-7 grid gap-3 sm:grid-cols-3">
@@ -586,7 +610,7 @@ export function AutonomousAgentPanel() {
               Agent Team
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {visibleAgents.map((agent) => {
                 const Icon = agentIcons[agent.id] ?? Bot;
 

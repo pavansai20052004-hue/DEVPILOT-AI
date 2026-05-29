@@ -31,3 +31,17 @@ frontend/.vercel/
 frontend/.git-backup*/
 
 .vercel
+
+# Codex local configuration
+.codex/
+
+# Claude Flow runtime data
+.claude-flow/data/
+.claude-flow/logs/
+.agents/
+.swarm/
+
+# Environment variables
+.env
+.env.local
+.env.*.local

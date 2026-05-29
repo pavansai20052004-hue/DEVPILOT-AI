@@ -65,11 +65,11 @@ export function RoleSwitcher({
 
   if (variant === "compact") {
     return (
-      <div className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 bg-[#0e1315] px-3 text-sm shadow-2xl shadow-black/20">
-        <span className="font-mono text-[11px] font-semibold uppercase text-zinc-500">
+      <div className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 bg-white/[0.045] px-3 text-sm shadow-2xl shadow-black/20">
+        <span className="font-mono text-[11px] font-semibold uppercase text-zinc-400">
           Role
         </span>
-        <span className="rounded-md border border-white/10 bg-[#050708] px-2 py-1 text-sm font-semibold text-zinc-100">
+        <span className="rounded-md border border-amber-300/25 bg-amber-300/10 px-2 py-1 text-sm font-semibold text-amber-50">
           {currentRoleLabel}
         </span>
       </div>
@@ -77,11 +77,11 @@ export function RoleSwitcher({
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-[#111719]/95 p-3 shadow-2xl shadow-black/20">
-      <p className="mb-2 text-xs font-semibold uppercase text-zinc-500">
+    <div className="premium-panel p-3">
+      <p className="mb-2 text-xs font-semibold uppercase text-zinc-400">
         Active role
       </p>
-      <p className="rounded-md border border-white/10 bg-[#07090b] px-3 py-2 text-sm font-semibold text-zinc-100">
+      <p className="rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-sm font-semibold text-amber-50">
         {currentRoleLabel}
       </p>
       <p className="mt-2 max-w-56 text-xs leading-5 text-zinc-400">

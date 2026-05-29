@@ -204,7 +204,7 @@ export function TeamSwitcher() {
   }
 
   return (
-    <div className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 bg-[#0e1315] px-3 text-sm shadow-2xl shadow-black/20">
+    <div className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 bg-white/[0.045] px-3 text-sm shadow-2xl shadow-black/20">
       <Building2 className="size-4 text-cyan-200" aria-hidden="true" />
       {isLoading ? (
         <Loader2 className="size-4 animate-spin text-zinc-500" aria-hidden="true" />
@@ -213,7 +213,7 @@ export function TeamSwitcher() {
           aria-label="Active team"
           value={selectedTeam?.id ?? teamId}
           onChange={(event) => switchTeam(event.target.value)}
-          className="h-8 max-w-44 rounded-md border border-white/10 bg-[#050708] px-2 text-sm font-semibold text-zinc-100 outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/20"
+          className="premium-input h-8 max-w-44 rounded-md px-2 text-sm font-semibold transition"
         >
           {teams.map((team) => (
             <option key={team.id} value={team.id}>

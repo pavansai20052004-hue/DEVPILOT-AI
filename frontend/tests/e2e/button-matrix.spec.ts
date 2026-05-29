@@ -264,6 +264,18 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await gotoAppRoute(page, "/agents");
   await expectRouteHeading(page, "Autonomous Agents");
   await clickEnabled(page.getByRole("button", { name: /run collaboration/i }));
+  await expect(
+    page.getByText("Bug Sentinel Agent", { exact: true }).first(),
+  ).toBeVisible({ timeout: expectTimeout });
+  await expect(
+    page.getByText("Frontend Guardian Agent", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Database Guardian Agent", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Release Auditor Agent", { exact: true }).first(),
+  ).toBeVisible();
   const rejectButtonLocator = page.getByRole("button", { name: /^reject$/i });
   await expect(rejectButtonLocator.first()).toBeVisible({
     timeout: expectTimeout,
