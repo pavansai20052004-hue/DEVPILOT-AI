@@ -13,6 +13,7 @@
     "test:e2e": "node scripts/clean-e2e-servers.mjs && playwright test"
   },
   "dependencies": {
+    "framer-motion": "^12.40.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",

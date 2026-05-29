@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
   BarChart3,
   BrainCircuit,
   CheckCircle2,
-  CloudCog,
-  Command,
   DollarSign,
   HeartPulse,
   Radar,
@@ -17,43 +14,13 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
+import { CinematicIntro } from "@/components/cinematic-intro";
 
 export const metadata: Metadata = {
   title: "DevPilot AI | AI DevOps Control Plane",
   description:
     "DevPilot AI is an AI DevOps control plane for incident recovery, remediation, and cloud operations ROI.",
 };
-
-const navLinks = [
-  { href: "#tam", label: "TAM" },
-  { href: "#problem", label: "Problem" },
-  { href: "#solution", label: "Solution" },
-  { href: "#roi", label: "ROI" },
-  { href: "#pricing", label: "Pricing" },
-];
-
-const heroMetrics = [
-  {
-    value: "$723B",
-    label: "public cloud spend forecast",
-  },
-  {
-    value: "$300K+",
-    label: "hourly outage exposure for enterprise teams",
-  },
-  {
-    value: "100%",
-    label: "demo recovery loop ready for judges",
-  },
-];
-
-const heroProofs = [
-  "Live dashboard",
-  "AI diagnosis",
-  "Terraform remediation",
-  "Kubernetes recovery",
-  "SaaS metering",
-];
 
 const marketSignals = [
   {
@@ -204,153 +171,8 @@ const productHighlights = [
 export default function Home() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[rgba(7,8,11,0.88)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="DevPilot AI home">
-            <span className="grid size-10 shrink-0 place-items-center rounded-md border border-cyan-300/35 bg-cyan-300/10">
-              <CloudCog className="size-5 text-cyan-200" aria-hidden="true" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-white">
-                DevPilot AI
-              </span>
-              <span className="block truncate text-xs text-zinc-400">
-                AI operations control plane
-              </span>
-            </span>
-          </Link>
-
-          <nav className="hidden items-center gap-1 lg:flex" aria-label="Investor sections">
-            {navLinks.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="rounded-md px-3 py-2 text-sm font-semibold text-zinc-400 transition hover:bg-white/[0.05] hover:text-zinc-100"
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-
-          <Link
-            href="/dashboard"
-            className="premium-button inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-lime-200 focus:ring-offset-2 focus:ring-offset-[var(--background)] sm:px-4"
-          >
-            <Command className="size-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Launch Cockpit</span>
-            <span className="sm:hidden">Product</span>
-          </Link>
-        </div>
-      </header>
-
       <main>
-        <section className="relative isolate overflow-hidden border-b border-white/10">
-          <div className="absolute inset-0 -z-10">
-            <Image
-              src="/devpilot-hero.png"
-              alt="DevPilot AI observability dashboard preview"
-              fill
-              priority
-              sizes="100vw"
-              className="object-cover object-center opacity-60"
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(7,8,11,0.98)_0%,rgba(7,8,11,0.86)_48%,rgba(7,8,11,0.56)_100%)]" />
-            <div className="absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(180deg,transparent,rgba(7,8,11,0.98))]" />
-          </div>
-
-          <div className="mx-auto flex min-h-[74svh] max-w-7xl flex-col justify-center px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
-            <div className="max-w-4xl">
-              <div className="premium-eyebrow w-fit">
-                <span className="size-2 rounded-full bg-lime-300" />
-                Working AI DevOps product for investor review
-              </div>
-              <h1 className="font-display mt-6 max-w-3xl text-5xl font-semibold leading-none text-white sm:text-6xl lg:text-7xl">
-                DevPilot AI
-              </h1>
-              <p className="mt-5 max-w-3xl text-xl font-semibold leading-tight text-zinc-100 sm:text-2xl lg:text-3xl">
-                The AI operations cockpit that turns production incidents into verified recovery actions.
-              </p>
-              <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-400 sm:text-lg">
-                DevPilot brings logs, Kubernetes health, Terraform remediation,
-                cloud cost, security, and SaaS metering into one human-approved
-                recovery loop built for serious DevOps buyers.
-              </p>
-
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link
-                  href="/dashboard"
-                  className="premium-button inline-flex h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-lime-200 focus:ring-offset-2 focus:ring-offset-[var(--background)]"
-                >
-                  <BarChart3 className="size-4" aria-hidden="true" />
-                  View Live Dashboard
-                </Link>
-                <a
-                  href="#roi"
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.08] px-4 text-sm font-semibold text-zinc-100 transition hover:border-cyan-200/50 hover:text-cyan-100 focus:outline-none focus:ring-2 focus:ring-cyan-200 focus:ring-offset-2 focus:ring-offset-[#050708]"
-                >
-                  See ROI Model
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </a>
-              </div>
-            </div>
-
-            <div className="hero-frame mt-9 p-4 sm:p-5">
-              <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_1.2fr] lg:items-center">
-                <div>
-                  <div className="flex flex-wrap gap-2">
-                    {heroProofs.map((proof) => (
-                      <span
-                        key={proof}
-                        className="inline-flex min-h-8 items-center rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-zinc-200"
-                      >
-                        {proof}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-                    {heroMetrics.map((metric) => (
-                      <div
-                        key={metric.label}
-                        className="rounded-md border border-white/10 bg-black/25 p-4"
-                      >
-                        <p className="font-mono text-2xl font-semibold text-white">
-                          {metric.value}
-                        </p>
-                        <p className="mt-2 text-sm leading-5 text-zinc-400">
-                          {metric.label}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-4">
-                  {solutionSteps.map((step, index) => {
-                    const Icon = step.icon;
-
-                    return (
-                      <div
-                        key={step.title}
-                        className="relative rounded-md border border-white/10 bg-white/[0.055] p-4"
-                      >
-                        <div className="mb-4 flex items-center justify-between gap-3">
-                          <Icon className="size-5 text-cyan-200" aria-hidden="true" />
-                          <span className="font-mono text-xs text-zinc-500">
-                            0{index + 1}
-                          </span>
-                        </div>
-                        <h3 className="text-base font-semibold text-white">{step.title}</h3>
-                        <p className="mt-2 text-xs leading-5 text-zinc-400">
-                          {step.description}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <CinematicIntro />
 
         <section id="tam" className="scroll-mt-24 border-y border-white/10 bg-[#07100f] px-4 py-14 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">

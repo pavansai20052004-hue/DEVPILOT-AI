@@ -1,23 +1,18 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
 import { RoleProvider } from "@/components/role-provider";
 import { TeamProvider } from "@/components/team-provider";
 import "./globals.css";
 
-const plusJakarta = Plus_Jakarta_Sans({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-plus-jakarta",
+  variable: "--font-inter",
 });
 
-const spaceGrotesk = Space_Grotesk({
+const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-space-grotesk",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-devpilot-mono",
+  variable: "--font-jetbrains-mono",
 });
 
 export const metadata: Metadata = {
@@ -33,7 +28,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plusJakarta.variable} ${spaceGrotesk.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <AuthProvider>

@@ -1,23 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #07080b;
-  --foreground: #f8fafc;
-  --surface-0: #090b10;
-  --surface-1: #0d1117;
-  --surface-2: #121821;
-  --surface-3: #17202b;
-  --line-soft: rgba(226, 232, 240, 0.1);
-  --line-strong: rgba(226, 232, 240, 0.18);
-  --accent-cyan: #67e8f9;
-  --accent-lime: #c9f86f;
-  --accent-amber: #f8c66a;
-  --accent-coral: #fb7185;
-  --accent-mint: #75f7c8;
-  --accent-violet: #a78bfa;
-  --font-geist-sans: var(--font-plus-jakarta), "Inter", "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-space-grotesk), var(--font-geist-sans);
-  --font-geist-mono: var(--font-devpilot-mono), "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --background: #0d1117;
+  --foreground: #c9d1d9;
+  --surface-0: #0d1117;
+  --surface-1: #161b22;
+  --surface-2: #1f2937;
+  --surface-3: #263241;
+  --line-soft: rgba(48, 54, 61, 0.9);
+  --line-strong: #30363d;
+  --accent-cyan: #58a6ff;
+  --accent-lime: #3fb950;
+  --accent-amber: #d29922;
+  --accent-coral: #f85149;
+  --accent-mint: #3fb950;
+  --accent-violet: #bc8cff;
+  --font-geist-sans: var(--font-inter), "Inter", "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), var(--font-geist-sans);
+  --font-geist-mono: var(--font-jetbrains-mono), "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 @theme inline {
@@ -280,4 +280,223 @@ h3,
     linear-gradient(90deg, rgba(248, 198, 106, 0.04) 1px, transparent 1px);
   background-size: 34px 34px;
   mask-image: linear-gradient(135deg, black, transparent 74%);
+}
+
+.cinematic-intro {
+  color-scheme: dark;
+}
+
+.cinematic-grid {
+  background:
+    linear-gradient(rgba(88, 166, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 166, 255, 0.075) 1px, transparent 1px),
+    linear-gradient(rgba(63, 185, 80, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 185, 80, 0.04) 1px, transparent 1px);
+  background-position:
+    0 0,
+    0 0,
+    0 0,
+    0 0;
+  background-size:
+    72px 72px,
+    72px 72px,
+    18px 18px,
+    18px 18px;
+  mask-image: radial-gradient(circle at 50% 30%, black 0%, transparent 78%);
+  animation: cinematic-grid-drift 18s linear infinite;
+}
+
+.cinematic-scanline {
+  background:
+    linear-gradient(180deg, transparent, rgba(88, 166, 255, 0.08), transparent),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.025) 0,
+      rgba(255, 255, 255, 0.025) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  background-size: 100% 18rem, 100% 4px;
+  animation: scanline-sweep 6s ease-in-out infinite;
+  opacity: 0.42;
+}
+
+.holographic-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.holographic-card::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background:
+    linear-gradient(120deg, transparent, rgba(88, 166, 255, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 32%);
+  opacity: 0.78;
+}
+
+.holographic-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.glitch-title {
+  position: relative;
+  letter-spacing: 0;
+  text-shadow:
+    0 0 24px rgba(88, 166, 255, 0.34),
+    0 0 64px rgba(63, 185, 80, 0.18);
+}
+
+.glitch-title::before,
+.glitch-title::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: attr(data-text);
+  opacity: 0.52;
+  mix-blend-mode: screen;
+}
+
+.glitch-title::before {
+  color: #58a6ff;
+  transform: translate(2px, -1px);
+  clip-path: inset(0 0 58% 0);
+  animation: glitch-slice 3.1s steps(2, end) infinite;
+}
+
+.glitch-title::after {
+  color: #3fb950;
+  transform: translate(-2px, 1px);
+  clip-path: inset(48% 0 0 0);
+  animation: glitch-slice 2.6s steps(2, end) infinite reverse;
+}
+
+.terminal-cursor {
+  animation: terminal-blink 0.95s steps(2, end) infinite;
+}
+
+.network-globe {
+  box-shadow:
+    0 0 0 1px rgba(88, 166, 255, 0.08) inset,
+    0 0 42px rgba(88, 166, 255, 0.16) inset,
+    0 0 70px rgba(63, 185, 80, 0.1);
+}
+
+.network-globe::before {
+  position: absolute;
+  inset: 8%;
+  content: "";
+  border-radius: 999px;
+  border: 1px solid rgba(88, 166, 255, 0.16);
+  background:
+    linear-gradient(90deg, transparent 49%, rgba(88, 166, 255, 0.18) 50%, transparent 51%),
+    linear-gradient(0deg, transparent 49%, rgba(63, 185, 80, 0.14) 50%, transparent 51%);
+  transform: rotateX(58deg) rotateZ(-18deg);
+  animation: globe-spin 12s linear infinite;
+}
+
+.network-node {
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 22px rgba(88, 166, 255, 0.2);
+}
+
+.auto-heal-button {
+  box-shadow:
+    0 0 0 1px rgba(63, 185, 80, 0.28) inset,
+    0 0 28px rgba(63, 185, 80, 0.24),
+    0 0 70px rgba(88, 166, 255, 0.16);
+  animation: heal-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes cinematic-grid-drift {
+  from {
+    background-position:
+      0 0,
+      0 0,
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      72px 72px,
+      72px 72px,
+      18px 18px,
+      18px 18px;
+  }
+}
+
+@keyframes scanline-sweep {
+  0%,
+  100% {
+    background-position: 0 -20rem, 0 0;
+  }
+  50% {
+    background-position: 0 100%, 0 0;
+  }
+}
+
+@keyframes glitch-slice {
+  0%,
+  88%,
+  100% {
+    transform: translate(0, 0);
+  }
+  90% {
+    transform: translate(3px, -2px);
+  }
+  92% {
+    transform: translate(-3px, 1px);
+  }
+  94% {
+    transform: translate(2px, 2px);
+  }
+}
+
+@keyframes terminal-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes globe-spin {
+  from {
+    transform: rotateX(58deg) rotateZ(-18deg);
+  }
+  to {
+    transform: rotateX(58deg) rotateZ(342deg);
+  }
+}
+
+@keyframes heal-pulse {
+  0%,
+  100% {
+    filter: saturate(1);
+    transform: translateZ(0);
+  }
+  50% {
+    filter: saturate(1.25);
+    transform: translateZ(0) scale(1.015);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-grid,
+  .cinematic-scanline,
+  .glitch-title::before,
+  .glitch-title::after,
+  .terminal-cursor,
+  .network-globe::before,
+  .auto-heal-button {
+    animation: none;
+  }
 }
