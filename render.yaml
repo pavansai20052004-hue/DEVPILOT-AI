@@ -34,6 +34,30 @@ services:
         sync: false
       - key: SMTP_USE_TLS
         value: "true"
+      - key: SSO_ENABLED
+        value: "false"
+      - key: SSO_PROVIDER_ID
+        sync: false
+      - key: SSO_PROVIDER_NAME
+        value: Company SSO
+      - key: SSO_DISCOVERY_URL
+        sync: false
+      - key: SSO_AUTHORIZATION_URL
+        sync: false
+      - key: SSO_TOKEN_URL
+        sync: false
+      - key: SSO_USERINFO_URL
+        sync: false
+      - key: SSO_CLIENT_ID
+        sync: false
+      - key: SSO_CLIENT_SECRET
+        sync: false
+      - key: SSO_REDIRECT_URI
+        sync: false
+      - key: SSO_ALLOWED_DOMAINS
+        sync: false
+      - key: SSO_DEFAULT_TEAM_NAME
+        sync: false
       # Add exact custom frontend origins here if you do not use the default platform domains.
       - key: FRONTEND_ORIGINS
         sync: false

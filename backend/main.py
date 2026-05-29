@@ -23,7 +23,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
 from uuid import uuid4
@@ -31,7 +31,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from kubernetes import client, config
 from kubernetes.client import ApiException
 from kubernetes.config.config_exception import ConfigException
@@ -100,6 +100,9 @@ RATE_LIMIT_EXEMPT_PATHS = {
     "/health",
     "/ready",
     "/auth/session",
+    "/auth/sso/config",
+    "/auth/sso/start",
+    "/auth/sso/callback",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -113,6 +116,9 @@ PUBLIC_PATHS = {
     "/auth/bootstrap",
     "/auth/login",
     "/auth/signup",
+    "/auth/sso/config",
+    "/auth/sso/start",
+    "/auth/sso/callback",
     "/auth/password-reset/request",
     "/auth/password-reset/confirm",
     "/docs",
@@ -142,6 +148,18 @@ SMTP_USERNAME_ENV = "SMTP_USERNAME"
 SMTP_PASSWORD_ENV = "SMTP_PASSWORD"
 SMTP_FROM_EMAIL_ENV = "SMTP_FROM_EMAIL"
 SMTP_USE_TLS_ENV = "SMTP_USE_TLS"
+SSO_ENABLED_ENV = "SSO_ENABLED"
+SSO_PROVIDER_ID_ENV = "SSO_PROVIDER_ID"
+SSO_PROVIDER_NAME_ENV = "SSO_PROVIDER_NAME"
+SSO_DISCOVERY_URL_ENV = "SSO_DISCOVERY_URL"
+SSO_AUTHORIZATION_URL_ENV = "SSO_AUTHORIZATION_URL"
+SSO_TOKEN_URL_ENV = "SSO_TOKEN_URL"
+SSO_USERINFO_URL_ENV = "SSO_USERINFO_URL"
+SSO_CLIENT_ID_ENV = "SSO_CLIENT_ID"
+SSO_CLIENT_SECRET_ENV = "SSO_CLIENT_SECRET"
+SSO_REDIRECT_URI_ENV = "SSO_REDIRECT_URI"
+SSO_ALLOWED_DOMAINS_ENV = "SSO_ALLOWED_DOMAINS"
+SSO_DEFAULT_TEAM_NAME_ENV = "SSO_DEFAULT_TEAM_NAME"
 
 
 def normalize_frontend_origin(origin: str) -> str | None:
@@ -703,6 +721,13 @@ class AuthSelectTeamRequest(BaseModel):
     team_id: str = Field(..., min_length=3, max_length=80)
 
 
+class AuthSsoConfigResponse(BaseModel):
+    enabled: bool
+    configured: bool
+    provider_name: str
+    login_url: str | None = None
+
+
 class AuthSessionResponse(BaseModel):
     authenticated: bool
     bootstrap_required: bool = False
@@ -755,6 +780,121 @@ def auth_session() -> AuthSessionResponse:
         team_rows=team_rows,
         csrf_token=CURRENT_SESSION_CSRF_TOKEN.get(),
     )
+
+
+@app.get("/auth/sso/config", response_model=AuthSsoConfigResponse)
+def auth_sso_config() -> AuthSsoConfigResponse:
+    configured = sso_provider_is_configured()
+    return AuthSsoConfigResponse(
+        enabled=configured,
+        configured=configured,
+        provider_name=sso_provider_name(),
+        login_url="/auth/sso/start" if configured else None,
+    )
+
+
+@app.get("/auth/sso/start")
+def auth_sso_start(
+    request: Request,
+    redirect_after: str = Query(default="/dashboard", max_length=300),
+) -> RedirectResponse:
+    if not sso_provider_is_configured():
+        raise HTTPException(status_code=404, detail="SSO is not configured.")
+
+    metadata = sso_provider_metadata()
+    provider = sso_provider_id()
+    state, nonce, code_verifier, _ = create_sso_state_record(
+        provider=provider,
+        redirect_after=safe_sso_redirect_after(redirect_after),
+        request=request,
+    )
+    params = {
+        "response_type": "code",
+        "client_id": os.getenv(SSO_CLIENT_ID_ENV, "").strip(),
+        "redirect_uri": sso_redirect_uri(request),
+        "scope": "openid email profile",
+        "state": state,
+        "nonce": nonce,
+        "code_challenge": code_challenge_for_verifier(code_verifier),
+        "code_challenge_method": "S256",
+    }
+
+    separator = "&" if "?" in metadata["authorization_endpoint"] else "?"
+    return RedirectResponse(
+        f"{metadata['authorization_endpoint']}{separator}{urlencode(params)}",
+        status_code=302,
+    )
+
+
+def sso_redirect_with_error(request: Request, message: str) -> RedirectResponse:
+    return RedirectResponse(
+        f"{frontend_base_url_from_request(request)}/dashboard?sso_error={quote(message)}",
+        status_code=302,
+    )
+
+
+@app.get("/auth/sso/callback", name="auth_sso_callback")
+def auth_sso_callback(
+    request: Request,
+    response: Response,
+    code: str | None = Query(default=None, max_length=2048),
+    state: str | None = Query(default=None, max_length=256),
+    error: str | None = Query(default=None, max_length=500),
+) -> RedirectResponse:
+    if error:
+        return sso_redirect_with_error(request, f"SSO sign in failed: {error}")
+    if not code or not state:
+        return sso_redirect_with_error(request, "SSO callback is missing code or state.")
+    if not sso_provider_is_configured():
+        return sso_redirect_with_error(request, "SSO is not configured.")
+
+    state_row = sso_state_row_for_token(state)
+    if state_row is None:
+        return sso_redirect_with_error(request, "SSO session expired. Start again.")
+
+    try:
+        metadata = sso_provider_metadata()
+        token_payload = exchange_sso_code_for_token(
+            metadata=metadata,
+            code=code,
+            code_verifier=str(state_row["code_verifier"]),
+            redirect_uri=sso_redirect_uri(request),
+        )
+        access_token = str(token_payload.get("access_token") or "").strip()
+        if not access_token:
+            raise HTTPException(
+                status_code=502,
+                detail="SSO provider did not return an access token.",
+            )
+
+        userinfo = fetch_sso_userinfo(metadata=metadata, access_token=access_token)
+        subject, email, full_name = validate_sso_userinfo(userinfo)
+        provider = str(state_row["provider"])
+        user_row, team = ensure_sso_user_and_team(
+            provider=provider,
+            subject=subject,
+            email=email,
+            full_name=full_name,
+        )
+        touch_auth_user_login(str(user_row["id"]), datetime.now(UTC).isoformat())
+        _, session_token, csrf_token = create_auth_session_record(
+            user_id=str(user_row["id"]),
+            team_id=team.id,
+            request=request,
+        )
+        mark_sso_state_used(str(state_row["id"]))
+
+        redirect_after = safe_sso_redirect_after(str(state_row["redirect_after"]))
+        redirect_separator = "&" if "?" in redirect_after else "?"
+        redirect_response = RedirectResponse(
+            f"{frontend_base_url_from_request(request)}"
+            f"{redirect_after}{redirect_separator}sso=success",
+            status_code=302,
+        )
+        set_auth_cookies(redirect_response, session_token, csrf_token)
+        return redirect_response
+    except HTTPException as exc:
+        return sso_redirect_with_error(request, str(exc.detail))
 
 
 @app.post("/auth/bootstrap", response_model=AuthSessionResponse)
@@ -3601,6 +3741,55 @@ def _initialize_storage_schema(connection: StorageConnectionProxy) -> None:
         ON auth_password_reset_tokens (used_at)
         """,
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS auth_sso_states (
+            id TEXT PRIMARY KEY,
+            state_hash TEXT NOT NULL UNIQUE,
+            provider TEXT NOT NULL,
+            nonce TEXT NOT NULL,
+            code_verifier TEXT NOT NULL,
+            redirect_after TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            user_agent TEXT,
+            ip_address TEXT
+        )
+        """,
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_auth_sso_states_expires_at
+        ON auth_sso_states (expires_at)
+        """,
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_auth_sso_states_used_at
+        ON auth_sso_states (used_at)
+        """,
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS auth_user_identities (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            email TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_login_at TEXT NOT NULL,
+            UNIQUE(provider, subject)
+        )
+        """,
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_auth_user_identities_user_id
+        ON auth_user_identities (user_id)
+        """,
+    )
 
 
 def init_incident_db() -> None:
@@ -4009,6 +4198,387 @@ def revoke_auth_sessions_for_user(user_id: str) -> None:
             """,
             (revoked_at, user_id),
         )
+
+
+def env_flag(name: str, *, default: bool = False) -> bool:
+    configured = os.getenv(name, "").strip().lower()
+    if not configured:
+        return default
+
+    return configured in {"1", "true", "yes", "on"}
+
+
+def sso_provider_name() -> str:
+    return os.getenv(SSO_PROVIDER_NAME_ENV, "Company SSO").strip() or "Company SSO"
+
+
+def sso_provider_id() -> str:
+    provider_id = os.getenv(SSO_PROVIDER_ID_ENV, "").strip().lower()
+    if provider_id:
+        return re.sub(r"[^a-z0-9_.:-]+", "-", provider_id)[:80] or "oidc"
+
+    return re.sub(r"[^a-z0-9_.:-]+", "-", sso_provider_name().lower())[:80] or "oidc"
+
+
+def sso_is_enabled() -> bool:
+    return env_flag(SSO_ENABLED_ENV)
+
+
+def sso_provider_is_configured() -> bool:
+    if not sso_is_enabled():
+        return False
+    if not os.getenv(SSO_CLIENT_ID_ENV, "").strip():
+        return False
+
+    if os.getenv(SSO_DISCOVERY_URL_ENV, "").strip():
+        return True
+
+    return bool(
+        os.getenv(SSO_AUTHORIZATION_URL_ENV, "").strip()
+        and os.getenv(SSO_TOKEN_URL_ENV, "").strip()
+        and os.getenv(SSO_USERINFO_URL_ENV, "").strip()
+    )
+
+
+def require_https_or_local_url(url: str, setting_name: str) -> str:
+    parsed = urlsplit(url.strip())
+    if parsed.scheme == "https":
+        return url.strip()
+    if parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1"}:
+        return url.strip()
+
+    raise HTTPException(
+        status_code=500,
+        detail=f"{setting_name} must be an HTTPS URL.",
+    )
+
+
+def fetch_json_url(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    form_data: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    encoded_data = urlencode(form_data).encode("utf-8") if form_data else None
+    request_headers = {"Accept": "application/json", **(headers or {})}
+    if encoded_data is not None:
+        request_headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+    request = UrlRequest(url, data=encoded_data, headers=request_headers)
+    try:
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        logger.warning("SSO provider request failed: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="SSO provider is unavailable. Please retry sign in.",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=502,
+            detail="SSO provider returned an invalid response.",
+        )
+
+    return payload
+
+
+def sso_provider_metadata() -> dict[str, str]:
+    discovery_url = os.getenv(SSO_DISCOVERY_URL_ENV, "").strip()
+    if discovery_url:
+        discovery = fetch_json_url(
+            require_https_or_local_url(discovery_url, SSO_DISCOVERY_URL_ENV),
+        )
+        metadata = {
+            "authorization_endpoint": str(discovery.get("authorization_endpoint") or ""),
+            "token_endpoint": str(discovery.get("token_endpoint") or ""),
+            "userinfo_endpoint": str(discovery.get("userinfo_endpoint") or ""),
+            "issuer": str(discovery.get("issuer") or discovery_url),
+        }
+    else:
+        metadata = {
+            "authorization_endpoint": os.getenv(SSO_AUTHORIZATION_URL_ENV, "").strip(),
+            "token_endpoint": os.getenv(SSO_TOKEN_URL_ENV, "").strip(),
+            "userinfo_endpoint": os.getenv(SSO_USERINFO_URL_ENV, "").strip(),
+            "issuer": sso_provider_id(),
+        }
+
+    for key in ("authorization_endpoint", "token_endpoint", "userinfo_endpoint"):
+        if not metadata[key]:
+            raise HTTPException(
+                status_code=500,
+                detail=f"SSO is missing {key}.",
+            )
+        metadata[key] = require_https_or_local_url(metadata[key], f"SSO {key}")
+
+    return metadata
+
+
+def safe_sso_redirect_after(value: str | None) -> str:
+    candidate = (value or "/dashboard").strip()
+    if not candidate.startswith("/") or candidate.startswith("//"):
+        return "/dashboard"
+
+    return candidate[:300]
+
+
+def sso_redirect_uri(request: Request) -> str:
+    configured = os.getenv(SSO_REDIRECT_URI_ENV, "").strip()
+    if configured:
+        return require_https_or_local_url(configured, SSO_REDIRECT_URI_ENV)
+
+    return str(request.url_for("auth_sso_callback"))
+
+
+def sso_allowed_domains() -> set[str]:
+    return {
+        domain.strip().lower().lstrip("@")
+        for domain in os.getenv(SSO_ALLOWED_DOMAINS_ENV, "").split(",")
+        if domain.strip()
+    }
+
+
+def validate_sso_email_domain(email: str) -> None:
+    allowed_domains = sso_allowed_domains()
+    if not allowed_domains:
+        return
+
+    domain = email.rsplit("@", 1)[-1].lower()
+    if domain not in allowed_domains:
+        raise HTTPException(
+            status_code=403,
+            detail="Your email domain is not allowed for DevPilot SSO.",
+        )
+
+
+def sso_state_hash(state: str) -> str:
+    digest = hmac.new(
+        session_secret().encode("utf-8"),
+        state.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    return base64url_encode(digest)
+
+
+def code_challenge_for_verifier(code_verifier: str) -> str:
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    return base64url_encode(digest)
+
+
+def create_sso_state_record(
+    *,
+    provider: str,
+    redirect_after: str,
+    request: Request | None = None,
+) -> tuple[str, str, str, str]:
+    state = secrets.token_urlsafe(48)
+    nonce = secrets.token_urlsafe(32)
+    code_verifier = secrets.token_urlsafe(64)
+    created_at = datetime.now(UTC)
+    expires_at = created_at + timedelta(minutes=10)
+    user_agent = request.headers.get("user-agent") if request else None
+    ip_address = request_client_ip(request) if request else None
+
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO auth_sso_states (
+                id, state_hash, provider, nonce, code_verifier, redirect_after,
+                created_at, expires_at, used_at, user_agent, ip_address
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid4()),
+                sso_state_hash(state),
+                provider,
+                nonce,
+                code_verifier,
+                redirect_after,
+                created_at.isoformat(),
+                expires_at.isoformat(),
+                None,
+                user_agent,
+                ip_address,
+            ),
+        )
+
+    return state, nonce, code_verifier, expires_at.isoformat()
+
+
+def sso_state_row_for_token(state: str) -> dict[str, Any] | None:
+    with incident_db_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, provider, nonce, code_verifier, redirect_after, expires_at, used_at
+            FROM auth_sso_states
+            WHERE state_hash = ?
+            LIMIT 1
+            """,
+            (sso_state_hash(state),),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    state_row = dict(row)
+    if state_row.get("used_at"):
+        return None
+
+    try:
+        if datetime.fromisoformat(str(state_row["expires_at"])) <= datetime.now(UTC):
+            return None
+    except ValueError:
+        return None
+
+    return state_row
+
+
+def mark_sso_state_used(state_id: str) -> None:
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE auth_sso_states
+            SET used_at = ?
+            WHERE id = ?
+            """,
+            (datetime.now(UTC).isoformat(), state_id),
+        )
+
+
+def exchange_sso_code_for_token(
+    *,
+    metadata: dict[str, str],
+    code: str,
+    code_verifier: str,
+    redirect_uri: str,
+) -> dict[str, Any]:
+    form_data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": os.getenv(SSO_CLIENT_ID_ENV, "").strip(),
+        "code_verifier": code_verifier,
+    }
+    client_secret = os.getenv(SSO_CLIENT_SECRET_ENV, "").strip()
+    if client_secret:
+        form_data["client_secret"] = client_secret
+
+    return fetch_json_url(metadata["token_endpoint"], form_data=form_data)
+
+
+def fetch_sso_userinfo(*, metadata: dict[str, str], access_token: str) -> dict[str, Any]:
+    return fetch_json_url(
+        metadata["userinfo_endpoint"],
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+
+def auth_identity_row(provider: str, subject: str) -> dict[str, Any] | None:
+    with incident_db_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, user_id, provider, subject, email, created_at, last_login_at
+            FROM auth_user_identities
+            WHERE provider = ? AND subject = ?
+            LIMIT 1
+            """,
+            (provider, subject),
+        ).fetchone()
+
+    return dict(row) if row else None
+
+
+def upsert_auth_identity(
+    *,
+    user_id: str,
+    provider: str,
+    subject: str,
+    email: str,
+) -> None:
+    timestamp = datetime.now(UTC).isoformat()
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO auth_user_identities (
+                id, user_id, provider, subject, email, created_at, last_login_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(provider, subject) DO UPDATE SET
+                email = excluded.email,
+                last_login_at = excluded.last_login_at
+            """,
+            (str(uuid4()), user_id, provider, subject, email, timestamp, timestamp),
+        )
+
+
+def sso_default_team_name(email: str) -> str:
+    configured = os.getenv(SSO_DEFAULT_TEAM_NAME_ENV, "").strip()
+    if configured:
+        return truncate_text(configured, 120)
+
+    domain = email.rsplit("@", 1)[-1].split(".", 1)[0].replace("-", " ").strip()
+    return f"{domain.title() if domain else 'Company'} DevPilot Workspace"
+
+
+def ensure_sso_user_and_team(
+    *,
+    provider: str,
+    subject: str,
+    email: str,
+    full_name: str | None,
+) -> tuple[dict[str, Any], SaaSTeamAccount]:
+    identity_row = auth_identity_row(provider, subject)
+    user_row = (
+        auth_user_row_by_id(str(identity_row["user_id"]))
+        if identity_row
+        else auth_user_row_by_email(email)
+    )
+
+    if user_row is None:
+        user_row = create_auth_user_if_missing(
+            email=email,
+            password=secrets.token_urlsafe(48),
+            full_name=full_name,
+        )
+
+    upsert_auth_identity(
+        user_id=str(user_row["id"]),
+        provider=provider,
+        subject=subject,
+        email=email,
+    )
+
+    team_rows = auth_user_team_rows(email)
+    if team_rows:
+        team = fetch_saas_team(str(team_rows[0]["id"]))
+    else:
+        team = create_saas_team(
+            TeamCreateRequest(
+                name=sso_default_team_name(email),
+                owner_email=email,
+                plan_id="free",
+            ),
+        )
+
+    if team is None:
+        raise HTTPException(status_code=500, detail="Could not create SSO workspace.")
+
+    return user_row, team
+
+
+def validate_sso_userinfo(userinfo: dict[str, Any]) -> tuple[str, str, str | None]:
+    subject = str(userinfo.get("sub") or "").strip()
+    email = normalize_owner_email(str(userinfo.get("email") or ""))
+    if not subject:
+        raise HTTPException(status_code=502, detail="SSO provider did not return a subject.")
+    if userinfo.get("email_verified") is False:
+        raise HTTPException(status_code=403, detail="SSO email address is not verified.")
+
+    validate_sso_email_domain(email)
+    full_name = str(userinfo.get("name") or "").strip() or None
+    return subject, email, full_name
 
 
 def frontend_base_url_from_request(request: Request) -> str:

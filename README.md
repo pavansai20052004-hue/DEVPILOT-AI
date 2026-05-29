@@ -46,6 +46,11 @@ DATABASE_URL=
 SESSION_SECRET=dev-only-change-me-please-generate-a-real-secret
 OPENAI_API_KEY=
 FRONTEND_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+SSO_ENABLED=false
+SSO_PROVIDER_NAME=Company SSO
+SSO_DISCOVERY_URL=
+SSO_CLIENT_ID=
+SSO_CLIENT_SECRET=
 DEVPILOT_MAX_REQUEST_BODY_BYTES=1500000
 DEVPILOT_RATE_LIMIT_WINDOW_SECONDS=60
 DEVPILOT_RATE_LIMIT_REQUESTS_PER_WINDOW=120
@@ -85,6 +90,9 @@ Open `http://127.0.0.1:3000`.
 The first visit to an app route prompts you to create the initial owner account.
 Production sessions use an HttpOnly signed JWT cookie plus a CSRF token; team
 and role access are read from the backend session instead of browser storage.
+Enterprise SSO is available through any OIDC provider by setting
+`SSO_ENABLED=true`, provider metadata, client credentials, and optional allowed
+email domains.
 
 ### Production Checks
 
@@ -156,6 +164,7 @@ out of local test runs unless you deliberately want live integrations.
 - Create a Neon Postgres database separately and set its connection string as the required Render secret `DATABASE_URL`.
 - Set `SESSION_SECRET` to a generated high-entropy value.
 - Set `FRONTEND_ORIGINS` to your deployed frontend origins if you use custom domains. The bundled regex already covers default `*.vercel.app` and `*.netlify.app` hosts.
+- To enable enterprise SSO, set `SSO_ENABLED=true`, either `SSO_DISCOVERY_URL` or the authorization/token/userinfo URLs, `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`, `SSO_REDIRECT_URI`, and optionally `SSO_ALLOWED_DOMAINS`.
 - Set `OPENAI_API_KEY`, `GITHUB_TOKEN`, `SLACK_WEBHOOK_URL`, and Kubernetes credentials only when live integrations are needed.
 - For Kubernetes on Render, prefer `KUBECONFIG_B64`: base64-encode the kubeconfig YAML and store that value as a Render secret. `KUBECONFIG_CONTENT` also works for hosts that safely support multiline secrets, while `KUBECONFIG` is for local/dev file paths.
 - Render should use `/ready` as the health check because it verifies the database connection.
@@ -173,6 +182,12 @@ APP_ENV=production
 DATABASE_URL=postgresql://...
 SESSION_SECRET=<generated secret>
 FRONTEND_ORIGINS=https://your-vercel-app.vercel.app,https://your-netlify-site.netlify.app
+SSO_ENABLED=false
+SSO_DISCOVERY_URL=https://your-idp.example.com/.well-known/openid-configuration
+SSO_CLIENT_ID=<oidc-client-id>
+SSO_CLIENT_SECRET=<oidc-client-secret>
+SSO_REDIRECT_URI=https://your-render-api.example.com/auth/sso/callback
+SSO_ALLOWED_DOMAINS=yourcompany.com
 KUBECONFIG_B64=<base64-encoded kubeconfig for Render live mode>
 KUBECONFIG_CONTENT=
 KUBECONFIG=
@@ -201,7 +216,7 @@ NEXT_PUBLIC_ENABLE_LIVE_K8S_TWIN=false
 ## Future Roadmap
 
 - Redis-backed rate limiting and request tracking
-- SSO and organization-level audit controls
+- SAML SSO, SCIM provisioning, and expanded organization-level audit controls
 - Background workers for long-running recovery jobs
 - Exportable incident reports and approvals
 - Persistent observability integrations

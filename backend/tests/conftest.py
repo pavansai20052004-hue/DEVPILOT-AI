@@ -24,6 +24,18 @@ for secret_name in (
     "KUBECONFIG",
     "KUBECONFIG_B64",
     "KUBECONFIG_CONTENT",
+    "SSO_ENABLED",
+    "SSO_PROVIDER_ID",
+    "SSO_PROVIDER_NAME",
+    "SSO_DISCOVERY_URL",
+    "SSO_AUTHORIZATION_URL",
+    "SSO_TOKEN_URL",
+    "SSO_USERINFO_URL",
+    "SSO_CLIENT_ID",
+    "SSO_CLIENT_SECRET",
+    "SSO_REDIRECT_URI",
+    "SSO_ALLOWED_DOMAINS",
+    "SSO_DEFAULT_TEAM_NAME",
 ):
     os.environ.pop(secret_name, None)
 
@@ -48,6 +60,18 @@ def isolated_backend_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         "KUBECONFIG",
         "KUBECONFIG_B64",
         "KUBECONFIG_CONTENT",
+        "SSO_ENABLED",
+        "SSO_PROVIDER_ID",
+        "SSO_PROVIDER_NAME",
+        "SSO_DISCOVERY_URL",
+        "SSO_AUTHORIZATION_URL",
+        "SSO_TOKEN_URL",
+        "SSO_USERINFO_URL",
+        "SSO_CLIENT_ID",
+        "SSO_CLIENT_SECRET",
+        "SSO_REDIRECT_URI",
+        "SSO_ALLOWED_DOMAINS",
+        "SSO_DEFAULT_TEAM_NAME",
     ):
         monkeypatch.delenv(secret_name, raising=False)
 

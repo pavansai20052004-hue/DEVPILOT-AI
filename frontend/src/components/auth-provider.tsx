@@ -70,6 +70,13 @@ type AuthPasswordResetResponse = {
   expires_at?: string | null;
 };
 
+type AuthSsoConfig = {
+  enabled: boolean;
+  configured: boolean;
+  provider_name: string;
+  login_url?: string | null;
+};
+
 type AuthPasswordResetInput = {
   email: string;
 };
@@ -493,22 +500,72 @@ function AuthForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [resetLink, setResetLink] = useState<string | null>(null);
+  const [ssoConfig, setSsoConfig] = useState<AuthSsoConfig | null>(null);
   const copy = modeCopy(mode);
   const error = submitError ?? loadError;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("reset_token");
-    if (!token) {
-      return;
+    const ssoError = params.get("sso_error");
+    let ssoErrorTimer: number | null = null;
+
+    if (ssoError) {
+      ssoErrorTimer = window.setTimeout(() => {
+        setSubmitError(ssoError);
+        window.history.replaceState({}, "", window.location.pathname);
+      }, 0);
     }
 
-    const resetModeTimer = window.setTimeout(() => {
-      setResetToken(token);
-      setMode("reset");
-    }, 0);
+    if (token) {
+      const resetModeTimer = window.setTimeout(() => {
+        setResetToken(token);
+        setMode("reset");
+      }, 0);
 
-    return () => window.clearTimeout(resetModeTimer);
+      return () => {
+        window.clearTimeout(resetModeTimer);
+        if (ssoErrorTimer) {
+          window.clearTimeout(ssoErrorTimer);
+        }
+      };
+    }
+
+    return () => {
+      if (ssoErrorTimer) {
+        window.clearTimeout(ssoErrorTimer);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    fetch(apiUrl("/auth/sso/config"), {
+      cache: "no-store",
+      credentials: "include",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        return (await response.json()) as AuthSsoConfig;
+      })
+      .then((payload) => {
+        if (isActive) {
+          setSsoConfig(payload);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setSsoConfig(null);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   function switchMode(nextMode: AuthMode) {
@@ -579,6 +636,11 @@ function AuthForm({
     }
   }
 
+  function startSsoSignIn() {
+    const loginUrl = ssoConfig?.login_url || "/auth/sso/start";
+    window.location.href = apiUrl(loginUrl);
+  }
+
   return (
     <div className="min-h-screen bg-[var(--background)] px-5 py-8 text-zinc-100 sm:px-6 lg:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
@@ -607,6 +669,7 @@ function AuthForm({
             <div className="grid gap-3">
               {[
                 "Separate owner accounts",
+                "Enterprise OIDC SSO",
                 "Team workspaces",
                 "Audit-ready actions",
               ].map((item) => (
@@ -676,6 +739,24 @@ function AuthForm({
               {copy.description}
             </p>
           </div>
+
+          {mode === "sign-in" && ssoConfig?.enabled ? (
+            <div className="mb-5">
+              <button
+                type="button"
+                onClick={startSsoSignIn}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-cyan-300/35 bg-cyan-300/10 px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-300/15"
+              >
+                <ShieldCheck className="size-4" aria-hidden="true" />
+                Continue with {ssoConfig.provider_name}
+              </button>
+              <div className="mt-4 flex items-center gap-3 text-xs font-semibold uppercase text-zinc-600">
+                <span className="h-px flex-1 bg-white/10" />
+                Password access
+                <span className="h-px flex-1 bg-white/10" />
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid gap-4">
             {mode === "reset" ? (

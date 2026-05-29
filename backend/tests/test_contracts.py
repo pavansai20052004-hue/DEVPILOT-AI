@@ -4,6 +4,7 @@ import base64
 import warnings
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
@@ -196,6 +197,102 @@ def test_password_reset_request_is_generic_for_unknown_email(client: TestClient)
         "If that email is registered, password reset instructions are on the way."
     )
     assert payload["reset_token"] is None
+
+
+def configure_test_sso(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SSO_ENABLED", "true")
+    monkeypatch.setenv("SSO_PROVIDER_ID", "test-idp")
+    monkeypatch.setenv("SSO_PROVIDER_NAME", "Test Company SSO")
+    monkeypatch.setenv("SSO_AUTHORIZATION_URL", "http://localhost:9000/authorize")
+    monkeypatch.setenv("SSO_TOKEN_URL", "http://localhost:9000/token")
+    monkeypatch.setenv("SSO_USERINFO_URL", "http://localhost:9000/userinfo")
+    monkeypatch.setenv("SSO_CLIENT_ID", "devpilot-client")
+    monkeypatch.setenv("SSO_CLIENT_SECRET", "devpilot-secret")
+    monkeypatch.setenv("SSO_ALLOWED_DOMAINS", "example.com")
+    monkeypatch.setenv("SSO_DEFAULT_TEAM_NAME", "Example SSO Workspace")
+
+
+def test_sso_config_is_hidden_until_oidc_is_configured(client: TestClient) -> None:
+    response = client.get("/auth/sso/config")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "enabled": False,
+        "configured": False,
+        "provider_name": "Company SSO",
+        "login_url": None,
+    }
+
+
+def test_sso_start_redirects_to_oidc_provider(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_test_sso(monkeypatch)
+
+    response = client.get("/auth/sso/start", follow_redirects=False)
+
+    assert response.status_code == 302
+    location = response.headers["location"]
+    parsed = urlsplit(location)
+    params = parse_qs(parsed.query)
+    assert location.startswith("http://localhost:9000/authorize?")
+    assert params["response_type"] == ["code"]
+    assert params["client_id"] == ["devpilot-client"]
+    assert params["scope"] == ["openid email profile"]
+    assert params["code_challenge_method"] == ["S256"]
+    assert params["state"][0]
+    assert params["nonce"][0]
+    assert params["code_challenge"][0]
+
+
+def test_sso_callback_creates_separate_account_workspace_and_session(
+    client: TestClient,
+    backend_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_test_sso(monkeypatch)
+    start_response = client.get("/auth/sso/start", follow_redirects=False)
+    state = parse_qs(urlsplit(start_response.headers["location"]).query)["state"][0]
+
+    def fake_exchange_sso_code_for_token(**kwargs: Any) -> dict[str, Any]:
+        assert kwargs["code"] == "provider-code"
+        assert kwargs["code_verifier"]
+        return {"access_token": "provider-access-token"}
+
+    def fake_fetch_sso_userinfo(**kwargs: Any) -> dict[str, Any]:
+        assert kwargs["access_token"] == "provider-access-token"
+        return {
+            "sub": "idp-user-123",
+            "email": "founder@example.com",
+            "email_verified": True,
+            "name": "SSO Founder",
+        }
+
+    monkeypatch.setattr(
+        backend_module,
+        "exchange_sso_code_for_token",
+        fake_exchange_sso_code_for_token,
+    )
+    monkeypatch.setattr(backend_module, "fetch_sso_userinfo", fake_fetch_sso_userinfo)
+
+    callback_response = client.get(
+        f"/auth/sso/callback?code=provider-code&state={state}",
+        follow_redirects=False,
+    )
+
+    assert callback_response.status_code == 302
+    assert callback_response.headers["location"].endswith("/dashboard?sso=success")
+    assert "devpilot_session=" in callback_response.headers["set-cookie"]
+
+    session_response = client.get("/auth/session")
+    assert session_response.status_code == 200
+    session_payload = session_response.json()
+    assert session_payload["authenticated"] is True
+    assert session_payload["user"]["email"] == "founder@example.com"
+    assert session_payload["user"]["full_name"] == "SSO Founder"
+    assert session_payload["current_team"]["name"] == "Example SSO Workspace"
+    assert session_payload["role"] == "admin"
 
 
 def test_agent_collaboration_assigns_specialist_readiness_agents(
