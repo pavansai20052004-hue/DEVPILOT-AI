@@ -32,11 +32,25 @@ const usageLabels: Record<TeamUsageMetric["metric"], string> = {
   auto_heal_actions: "Recovery actions",
 };
 
+type AuthIntegrationCheck = {
+  configured: boolean;
+  ready: boolean;
+  detail: string;
+  provider_name?: string | null;
+};
+
+type AuthIntegrationsReadiness = {
+  smtp: AuthIntegrationCheck;
+  sso: AuthIntegrationCheck;
+};
+
 export function SaaSAccountPanel() {
   const { session } = useAuth();
   const { role, can, roleLabel } = useRole();
   const { teamId, setTeamId } = useTeam();
   const [bootstrap, setBootstrap] = useState<SaaSBootstrap | null>(null);
+  const [integrations, setIntegrations] =
+    useState<AuthIntegrationsReadiness | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [updatingPlanId, setUpdatingPlanId] = useState<BillingPlanId | null>(null);
@@ -79,6 +93,26 @@ export function SaaSAccountPanel() {
     [teamId],
   );
 
+  const loadIntegrations = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/integrations/readiness`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const payload: unknown = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          getApiErrorMessage(payload, "Integration status is unavailable."),
+        );
+      }
+
+      setIntegrations(payload as AuthIntegrationsReadiness);
+    } catch {
+      setIntegrations(null);
+    }
+  }, []);
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void loadBootstrap();
@@ -88,6 +122,16 @@ export function SaaSAccountPanel() {
       window.clearTimeout(timeoutId);
     };
   }, [loadBootstrap]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadIntegrations();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [loadIntegrations]);
 
   const currentPlan = bootstrap?.usage.plan;
   const currentTeam = bootstrap?.usage.team;
@@ -300,6 +344,23 @@ export function SaaSAccountPanel() {
               <p className="mt-2 text-xs text-zinc-500">
                 {apiUsage?.remaining ?? 0} remaining this month
               </p>
+            </div>
+          </div>
+
+          <div className="mt-7 rounded-lg border border-white/10 bg-[#101618] p-4">
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-white">
+              <ShieldCheck className="size-4 text-cyan-200" aria-hidden="true" />
+              Launch Integrations
+            </div>
+            <div className="grid gap-3">
+              <IntegrationStatus
+                label="SMTP password reset"
+                check={integrations?.smtp ?? null}
+              />
+              <IntegrationStatus
+                label={integrations?.sso.provider_name ?? "OIDC SSO"}
+                check={integrations?.sso ?? null}
+              />
             </div>
           </div>
 
@@ -556,5 +617,55 @@ export function SaaSAccountPanel() {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function IntegrationStatus({
+  label,
+  check,
+}: {
+  label: string;
+  check: AuthIntegrationCheck | null;
+}) {
+  const ready = check?.ready === true;
+  let status = "Checking";
+  if (check) {
+    if (ready) {
+      status = "Ready";
+    } else if (check.configured) {
+      status = "Needs setup";
+    } else {
+      status = "Not configured";
+    }
+  }
+  const Icon = ready ? CheckCircle2 : AlertCircle;
+
+  return (
+    <div
+      className={`rounded-lg border px-4 py-3 ${
+        ready
+          ? "border-lime-300/30 bg-lime-300/10"
+          : "border-amber-300/20 bg-amber-300/10"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-white">{label}</p>
+          <p className="mt-1 text-sm leading-6 text-zinc-400">
+            {check?.detail ?? "Checking provider configuration."}
+          </p>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-semibold uppercase ${
+            ready
+              ? "border-lime-300/30 bg-lime-300/15 text-lime-100"
+              : "border-amber-300/25 bg-amber-300/10 text-amber-100"
+          }`}
+        >
+          <Icon className="size-3.5" aria-hidden="true" />
+          {status}
+        </span>
+      </div>
+    </div>
   );
 }

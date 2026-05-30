@@ -671,7 +671,7 @@ function AuthForm({
               </h1>
               <p className="mt-4 max-w-lg text-base leading-7 text-zinc-400">
                 Separate accounts, team workspaces, CSRF-protected sessions, and
-                reset-ready access for demos, judges, and real buyers.
+                production SMTP resets for judges, teams, and real buyers.
               </p>
             </div>
 
@@ -679,8 +679,8 @@ function AuthForm({
               {[
                 "Separate owner accounts",
                 "Enterprise OIDC SSO",
+                "Production SMTP resets",
                 "Team workspaces",
-                "Audit-ready actions",
               ].map((item) => (
                 <div
                   key={item}
@@ -852,7 +852,7 @@ function AuthForm({
                   href={resetLink}
                   className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border border-lime-300/30 bg-lime-300/15 px-3 text-xs font-semibold text-lime-50 transition hover:bg-lime-300/20"
                 >
-                  Open demo reset link
+                  Open reset link
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </a>
               ) : null}

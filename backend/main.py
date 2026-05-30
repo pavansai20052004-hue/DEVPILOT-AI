@@ -728,6 +728,18 @@ class AuthSsoConfigResponse(BaseModel):
     login_url: str | None = None
 
 
+class AuthIntegrationCheck(BaseModel):
+    configured: bool
+    ready: bool
+    detail: str
+    provider_name: str | None = None
+
+
+class AuthIntegrationsReadinessResponse(BaseModel):
+    smtp: AuthIntegrationCheck
+    sso: AuthIntegrationCheck
+
+
 class AuthSessionResponse(BaseModel):
     authenticated: bool
     bootstrap_required: bool = False
@@ -790,6 +802,14 @@ def auth_sso_config() -> AuthSsoConfigResponse:
         configured=configured,
         provider_name=sso_provider_name(),
         login_url="/auth/sso/start" if configured else None,
+    )
+
+
+@app.get("/auth/integrations/readiness", response_model=AuthIntegrationsReadinessResponse)
+def auth_integrations_readiness() -> AuthIntegrationsReadinessResponse:
+    return AuthIntegrationsReadinessResponse(
+        smtp=smtp_readiness_check(),
+        sso=sso_readiness_check(),
     )
 
 
@@ -4229,6 +4249,10 @@ def sso_provider_is_configured() -> bool:
         return False
     if not os.getenv(SSO_CLIENT_ID_ENV, "").strip():
         return False
+    if not os.getenv(SSO_CLIENT_SECRET_ENV, "").strip():
+        return False
+    if not os.getenv(SSO_REDIRECT_URI_ENV, "").strip():
+        return False
 
     if os.getenv(SSO_DISCOVERY_URL_ENV, "").strip():
         return True
@@ -4599,8 +4623,143 @@ def build_password_reset_url(request: Request, token: str) -> str:
     return f"{frontend_base_url_from_request(request)}/dashboard?reset_token={quote(token)}"
 
 
+def smtp_readiness_check() -> AuthIntegrationCheck:
+    host = os.getenv(SMTP_HOST_ENV, "").strip()
+    from_email = os.getenv(SMTP_FROM_EMAIL_ENV, "").strip()
+    username = os.getenv(SMTP_USERNAME_ENV, "").strip()
+    password = os.getenv(SMTP_PASSWORD_ENV, "").strip()
+    missing = [
+        setting
+        for setting, value in (
+            (SMTP_HOST_ENV, host),
+            (SMTP_FROM_EMAIL_ENV, from_email),
+        )
+        if not value
+    ]
+
+    if missing:
+        return AuthIntegrationCheck(
+            configured=False,
+            ready=False,
+            detail=f"Set {', '.join(missing)} to enable real password reset email.",
+        )
+
+    if not EMAIL_RE.fullmatch(from_email.lower()):
+        return AuthIntegrationCheck(
+            configured=True,
+            ready=False,
+            detail=f"{SMTP_FROM_EMAIL_ENV} must be a valid verified sender email.",
+        )
+
+    configured_port = os.getenv(SMTP_PORT_ENV, "587").strip() or "587"
+    try:
+        port = int(configured_port)
+    except ValueError:
+        return AuthIntegrationCheck(
+            configured=True,
+            ready=False,
+            detail=f"{SMTP_PORT_ENV} must be a numeric TCP port.",
+        )
+
+    if port < 1 or port > 65535:
+        return AuthIntegrationCheck(
+            configured=True,
+            ready=False,
+            detail=f"{SMTP_PORT_ENV} must be between 1 and 65535.",
+        )
+
+    is_sendgrid = "sendgrid.net" in host.lower()
+    if is_sendgrid and username != "apikey":
+        return AuthIntegrationCheck(
+            configured=True,
+            ready=False,
+            detail=f"SendGrid SMTP requires {SMTP_USERNAME_ENV}=apikey.",
+        )
+
+    if (username or is_sendgrid) and not password:
+        return AuthIntegrationCheck(
+            configured=True,
+            ready=False,
+            detail=f"Set {SMTP_PASSWORD_ENV} to the provider SMTP password or API key.",
+        )
+
+    if password and not username:
+        return AuthIntegrationCheck(
+            configured=True,
+            ready=False,
+            detail=f"Set {SMTP_USERNAME_ENV} when {SMTP_PASSWORD_ENV} is configured.",
+        )
+
+    return AuthIntegrationCheck(
+        configured=True,
+        ready=True,
+        detail=f"SMTP password reset email is ready through {host}:{port}.",
+    )
+
+
+def sso_readiness_check() -> AuthIntegrationCheck:
+    provider_name = sso_provider_name()
+    if not sso_is_enabled():
+        return AuthIntegrationCheck(
+            configured=False,
+            ready=False,
+            provider_name=provider_name,
+            detail=f"Set {SSO_ENABLED_ENV}=true to enable enterprise OIDC SSO.",
+        )
+
+    has_discovery = bool(os.getenv(SSO_DISCOVERY_URL_ENV, "").strip())
+    required_settings = [
+        setting
+        for setting, value in (
+            (SSO_CLIENT_ID_ENV, os.getenv(SSO_CLIENT_ID_ENV, "").strip()),
+            (SSO_CLIENT_SECRET_ENV, os.getenv(SSO_CLIENT_SECRET_ENV, "").strip()),
+            (SSO_REDIRECT_URI_ENV, os.getenv(SSO_REDIRECT_URI_ENV, "").strip()),
+        )
+        if not value
+    ]
+    if not has_discovery:
+        required_settings.extend(
+            setting
+            for setting, value in (
+                (SSO_AUTHORIZATION_URL_ENV, os.getenv(SSO_AUTHORIZATION_URL_ENV, "").strip()),
+                (SSO_TOKEN_URL_ENV, os.getenv(SSO_TOKEN_URL_ENV, "").strip()),
+                (SSO_USERINFO_URL_ENV, os.getenv(SSO_USERINFO_URL_ENV, "").strip()),
+            )
+            if not value
+        )
+
+    if required_settings:
+        return AuthIntegrationCheck(
+            configured=False,
+            ready=False,
+            provider_name=provider_name,
+            detail=f"Set {', '.join(required_settings)} to enable real OIDC SSO.",
+        )
+
+    try:
+        sso_provider_metadata()
+        require_https_or_local_url(
+            os.getenv(SSO_REDIRECT_URI_ENV, "").strip(),
+            SSO_REDIRECT_URI_ENV,
+        )
+    except HTTPException as exc:
+        return AuthIntegrationCheck(
+            configured=True,
+            ready=False,
+            provider_name=provider_name,
+            detail=str(exc.detail),
+        )
+
+    return AuthIntegrationCheck(
+        configured=True,
+        ready=True,
+        provider_name=provider_name,
+        detail=f"{provider_name} OIDC metadata and callback URL are ready.",
+    )
+
+
 def smtp_is_configured() -> bool:
-    return bool(os.getenv(SMTP_HOST_ENV, "").strip() and os.getenv(SMTP_FROM_EMAIL_ENV, "").strip())
+    return smtp_readiness_check().ready
 
 
 def smtp_port() -> int:
@@ -4621,10 +4780,12 @@ def smtp_use_tls() -> bool:
 
 
 def send_password_reset_email(*, email: str, reset_url: str) -> None:
-    if not smtp_is_configured():
+    smtp_readiness = smtp_readiness_check()
+    if not smtp_readiness.ready:
         logger.info(
-            "SMTP is not configured; password reset email for %s was not sent.",
+            "SMTP is not ready; password reset email for %s was not sent: %s",
             email,
+            smtp_readiness.detail,
         )
         return
 

@@ -208,6 +208,10 @@ def configure_test_sso(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SSO_USERINFO_URL", "http://localhost:9000/userinfo")
     monkeypatch.setenv("SSO_CLIENT_ID", "devpilot-client")
     monkeypatch.setenv("SSO_CLIENT_SECRET", "devpilot-secret")
+    monkeypatch.setenv(
+        "SSO_REDIRECT_URI",
+        "http://localhost:8000/auth/sso/callback",
+    )
     monkeypatch.setenv("SSO_ALLOWED_DOMAINS", "example.com")
     monkeypatch.setenv("SSO_DEFAULT_TEAM_NAME", "Example SSO Workspace")
 
@@ -222,6 +226,42 @@ def test_sso_config_is_hidden_until_oidc_is_configured(client: TestClient) -> No
         "provider_name": "Company SSO",
         "login_url": None,
     }
+
+
+def test_auth_integrations_readiness_reports_real_smtp_and_sso_requirements(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bootstrap_admin(client)
+
+    missing_response = client.get("/auth/integrations/readiness")
+
+    assert missing_response.status_code == 200, missing_response.text
+    missing_payload = missing_response.json()
+    assert missing_payload["smtp"]["ready"] is False
+    assert missing_payload["smtp"]["configured"] is False
+    assert "SMTP_HOST" in missing_payload["smtp"]["detail"]
+    assert missing_payload["sso"]["ready"] is False
+    assert missing_payload["sso"]["configured"] is False
+    assert "SSO_ENABLED=true" in missing_payload["sso"]["detail"]
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.sendgrid.net")
+    monkeypatch.setenv("SMTP_PORT", "587")
+    monkeypatch.setenv("SMTP_USERNAME", "apikey")
+    monkeypatch.setenv("SMTP_PASSWORD", "sendgrid-api-key")
+    monkeypatch.setenv("SMTP_FROM_EMAIL", "noreply@example.com")
+    configure_test_sso(monkeypatch)
+
+    ready_response = client.get("/auth/integrations/readiness")
+
+    assert ready_response.status_code == 200, ready_response.text
+    ready_payload = ready_response.json()
+    assert ready_payload["smtp"]["configured"] is True
+    assert ready_payload["smtp"]["ready"] is True
+    assert "smtp.sendgrid.net:587" in ready_payload["smtp"]["detail"]
+    assert ready_payload["sso"]["configured"] is True
+    assert ready_payload["sso"]["ready"] is True
+    assert ready_payload["sso"]["provider_name"] == "Test Company SSO"
 
 
 def test_sso_start_redirects_to_oidc_provider(
