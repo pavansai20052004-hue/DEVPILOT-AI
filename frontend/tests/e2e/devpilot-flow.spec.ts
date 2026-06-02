@@ -114,8 +114,8 @@ test("DevPilot incident flow updates the dashboard", async ({ page }) => {
     "Production API has CrashLoopBackOff because DATABASE_URL is missing.",
   );
   await page.getByRole("button", { name: /generate files/i }).click();
-  await expect(page.getByText("Generated Files")).toBeVisible();
-  await expect(page.getByText("Deployment Suggestions")).toBeVisible();
+  await expect(page.getByText("Generated Files", { exact: true }).last()).toBeVisible();
+  await expect(page.getByText("Deployment Suggestions", { exact: true })).toBeVisible();
 
   await gotoAppRoute(page, "/auto-heal");
   await page.getByRole("button", { name: /run manual heal/i }).click();

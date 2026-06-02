@@ -331,7 +331,9 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await expectRouteHeading(page, "Fix Pull Request");
   await page.getByLabel("Repository").fill("demo/devpilot-ai");
   await clickEnabled(page.getByRole("button", { name: /generate files/i }));
-  await expect(page.getByText("Generated Files")).toBeVisible({ timeout: expectTimeout });
+  await expect(page.getByText("Generated Files", { exact: true }).last()).toBeVisible({
+    timeout: expectTimeout,
+  });
   await clickEnabled(page.getByRole("button", { name: /create pr/i }));
   await expect(page.getByText(/pull request opened in demo\/devpilot-ai\./i)).toBeVisible({
     timeout: expectTimeout,
