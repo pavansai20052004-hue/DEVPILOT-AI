@@ -29,6 +29,8 @@ jobs:
             test "$status" = "200"
             grep -qi "DevPilot" /tmp/devpilot-page.html
           done
+          curl -fsS -L https://devpilot-ai-two.vercel.app/ -o /tmp/devpilot-home.html
+          grep -qi "Request pilot access" /tmp/devpilot-home.html
 
       - name: Check backend readiness
         shell: bash
@@ -50,5 +52,8 @@ jobs:
             -H "Origin: https://devpilot-ai-two.vercel.app" \
             https://devpilot-ai-api-xkmg.onrender.com/auth/sso/config \
             | tee /tmp/sso.json
+          curl -fsS https://devpilot-ai-api-xkmg.onrender.com/openapi.json \
+            | tee /tmp/openapi.json
           grep -q '"authenticated":false' /tmp/session.json
           grep -q '"provider_name"' /tmp/sso.json
+          grep -q '"/pilot/leads"' /tmp/openapi.json
