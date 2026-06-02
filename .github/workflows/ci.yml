@@ -69,6 +69,19 @@ jobs:
           NEXT_PUBLIC_API_URL: https://devpilot-ai-api-xkmg.onrender.com
         run: npm run build
 
+      - name: Set up Python for E2E backend
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install E2E backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
