@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { CinematicIntro } from "@/components/cinematic-intro";
+import { PilotLeadCapture } from "@/components/pilot-lead-capture";
 
 export const metadata: Metadata = {
   title: "DevPilot AI | AI DevOps Control Plane",
@@ -361,6 +362,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <PilotLeadCapture />
 
         <section className="px-4 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">

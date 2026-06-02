@@ -198,6 +198,11 @@ export function ProductionMonitoringPanel() {
     return Math.round((operationalCount / status.components.length) * 100);
   }, [operationalCount, status]);
 
+  const pilotLeadCount = useMemo(() => {
+    const metric = status?.metrics.find((item) => item.label === "Pilot leads");
+    return metric?.value ?? 0;
+  }, [status]);
+
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
@@ -307,13 +312,13 @@ export function ProductionMonitoringPanel() {
             </div>
             <div className="rounded-md border border-white/10 bg-black/25 p-4">
               <p className="text-xs font-semibold uppercase text-zinc-500">
-                Beta users
+                Pilot leads
               </p>
               <p className="mt-2 text-3xl font-semibold text-white">
-                {feedbackSummary?.total_feedback ?? 0}
+                {pilotLeadCount}
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                {feedbackSummary?.interested_pilots ?? 0} interested in pilot
+                {feedbackSummary?.total_feedback ?? 0} beta feedback records
               </p>
             </div>
           </div>

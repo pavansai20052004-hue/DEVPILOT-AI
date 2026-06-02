@@ -300,7 +300,62 @@ def test_monitoring_status_reports_production_readiness_components(
         "Incidents stored",
         "Agent actions",
         "Beta feedback",
+        "Pilot leads",
     }.issubset(metric_labels)
+
+
+def test_public_pilot_lead_capture_feeds_monitoring(
+    client: TestClient,
+) -> None:
+    lead_response = client.post(
+        "/pilot/leads",
+        json={
+            "name": "Launch Buyer",
+            "email": "Buyer@Example.com",
+            "role": "Platform Director",
+            "company": "Example SaaS",
+            "team_size": "25-50 engineers",
+            "primary_pain": "We lose too much time moving from incident alerts to safe fixes.",
+            "source": "landing_page_test",
+            "desired_followup": True,
+        },
+    )
+
+    assert lead_response.status_code == 200, lead_response.text
+    lead = lead_response.json()["lead"]
+    assert lead["email"] == "buyer@example.com"
+    assert lead["desired_followup"] is True
+
+    update_response = client.post(
+        "/pilot/leads",
+        json={
+            "name": "Launch Buyer",
+            "email": "buyer@example.com",
+            "role": "VP Engineering",
+            "company": "Example SaaS",
+            "team_size": "50-100 engineers",
+            "primary_pain": "We need AI-assisted recovery with approval trails before pilots.",
+            "source": "pricing_section",
+            "desired_followup": False,
+        },
+    )
+    assert update_response.status_code == 200, update_response.text
+    assert update_response.json()["lead"]["id"] == lead["id"]
+    assert update_response.json()["lead"]["role"] == "VP Engineering"
+
+    bootstrap_admin(client)
+
+    summary_response = client.get("/pilot/leads/summary")
+    assert summary_response.status_code == 200, summary_response.text
+    summary = summary_response.json()
+    assert summary["total_leads"] == 1
+    assert summary["desired_followups"] == 0
+    assert summary["recent_leads"][0]["email"] == "buyer@example.com"
+
+    monitoring_response = client.get("/monitoring/status")
+    assert monitoring_response.status_code == 200
+    metrics = {metric["label"]: metric["value"] for metric in monitoring_response.json()["metrics"]}
+    assert metrics["Pilot leads"] == 1
 
 
 def test_beta_feedback_flow_collects_real_user_feedback(

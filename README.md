@@ -114,6 +114,7 @@ npm run test:e2e
 - Scheduled production smoke checks are defined in `.github/workflows/production-smoke.yml`. They verify the live Vercel frontend routes, Render `/health` and `/ready`, and public auth/SSO configuration endpoints every six hours.
 - The authenticated app includes `Production Monitoring` at `/monitoring`. It shows API uptime, storage mode, frontend/backend URLs, SMTP, SSO, OpenAI, GitHub, Slack, CI/CD, and database readiness.
 - The monitoring page also captures beta user feedback into the backend database, giving DevPilot a real pilot-user pipeline instead of a static demo form.
+- The public landing page includes a pilot access form backed by `/pilot/leads`, so real buyer interest can be captured before a visitor creates an account.
 
 Docker:
 

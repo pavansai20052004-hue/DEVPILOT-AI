@@ -95,6 +95,26 @@ async function authenticateFirstOwner(page: Page) {
   });
 }
 
+test("landing captures public pilot lead interest", async ({ page }) => {
+  await gotoAppRoute(page, "/");
+  const pilotSection = page.locator("#pilot");
+  await pilotSection.scrollIntoViewIfNeeded();
+  await pilotSection.getByLabel("Name").fill("E2E Buyer");
+  await pilotSection.getByLabel("Work email").fill("buyer@example.com");
+  await pilotSection.getByLabel("Role").fill("Platform Lead");
+  await pilotSection.getByLabel("Company").fill("Example SaaS");
+  await pilotSection.getByLabel("Team size").selectOption("50-200 engineers");
+  await pilotSection
+    .getByLabel("Biggest incident response pain")
+    .fill("We need faster incident recovery with approval trails.");
+  await pilotSection
+    .getByRole("button", { name: /^request pilot access$/i })
+    .click();
+  await expect(
+    pilotSection.getByText(/you are on the devpilot pilot list/i),
+  ).toBeVisible();
+});
+
 test("DevPilot incident flow updates the dashboard", async ({ page }) => {
   await authenticateFirstOwner(page);
 

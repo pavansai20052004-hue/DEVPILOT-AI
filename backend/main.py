@@ -121,6 +121,7 @@ PUBLIC_PATHS = {
     "/auth/sso/callback",
     "/auth/password-reset/request",
     "/auth/password-reset/confirm",
+    "/pilot/leads",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -1492,6 +1493,42 @@ class BetaFeedbackSummaryResponse(BaseModel):
     average_rating: float | None = None
     interested_pilots: int
     recent_feedback: list[BetaFeedbackRecord]
+
+
+class PilotLeadRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=120)
+    email: str = Field(..., min_length=3, max_length=254)
+    role: str = Field(default="DevOps Lead", min_length=2, max_length=120)
+    company: str | None = Field(default=None, max_length=160)
+    team_size: str | None = Field(default=None, max_length=80)
+    primary_pain: str = Field(..., min_length=10, max_length=2_000)
+    source: str = Field(default="landing_page", max_length=120)
+    desired_followup: bool = True
+
+
+class PilotLeadRecord(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    company: str | None = None
+    team_size: str | None = None
+    primary_pain: str
+    source: str
+    desired_followup: bool
+    created_at: str
+    updated_at: str
+
+
+class PilotLeadResponse(BaseModel):
+    message: str
+    lead: PilotLeadRecord
+
+
+class PilotLeadSummaryResponse(BaseModel):
+    total_leads: int
+    desired_followups: int
+    recent_leads: list[PilotLeadRecord]
 
 
 class IncidentSearchRequest(BaseModel):
@@ -3752,6 +3789,42 @@ def _initialize_storage_schema(connection: StorageConnectionProxy) -> None:
     )
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS pilot_leads (
+            id TEXT PRIMARY KEY,
+            team_id TEXT NOT NULL DEFAULT 'team_default',
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            role TEXT NOT NULL,
+            company TEXT,
+            team_size TEXT,
+            primary_pain TEXT NOT NULL,
+            source TEXT NOT NULL,
+            desired_followup INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """,
+    )
+    ensure_sqlite_column(
+        connection,
+        "pilot_leads",
+        "team_id",
+        "TEXT NOT NULL DEFAULT 'team_default'",
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_pilot_leads_team_updated
+        ON pilot_leads (team_id, updated_at DESC)
+        """,
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_pilot_leads_followup
+        ON pilot_leads (desired_followup, updated_at DESC)
+        """,
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS custom_model_training_runs (
             id TEXT PRIMARY KEY,
             model_name TEXT NOT NULL,
@@ -5624,7 +5697,7 @@ TEAM_SCOPED_COUNT_TABLES = {
     "beta_user_feedback",
     "saas_team_members",
 }
-COUNT_TABLES = TEAM_SCOPED_COUNT_TABLES | {"auth_users", "saas_teams"}
+COUNT_TABLES = TEAM_SCOPED_COUNT_TABLES | {"auth_users", "saas_teams", "pilot_leads"}
 
 
 def storage_table_count(table_name: str, team_id: str | None = None) -> int:
@@ -5735,6 +5808,110 @@ def beta_feedback_summary(team_id: str) -> BetaFeedbackSummaryResponse:
         average_rating=round(float(average_rating), 2) if average_rating is not None else None,
         interested_pilots=int(summary.get("interested_pilots", 0) or 0),
         recent_feedback=[beta_feedback_record_from_row(row) for row in recent_rows],
+    )
+
+
+def pilot_lead_record_from_row(row: Any) -> PilotLeadRecord:
+    values = dict(row)
+    return PilotLeadRecord(
+        id=str(values["id"]),
+        name=str(values["name"]),
+        email=str(values["email"]),
+        role=str(values["role"]),
+        company=values.get("company"),
+        team_size=values.get("team_size"),
+        primary_pain=str(values["primary_pain"]),
+        source=str(values["source"]),
+        desired_followup=bool(int(values["desired_followup"])),
+        created_at=str(values["created_at"]),
+        updated_at=str(values["updated_at"]),
+    )
+
+
+def create_pilot_lead(payload: PilotLeadRequest) -> PilotLeadRecord:
+    email = normalize_owner_email(payload.email)
+    submitted_at = datetime.now(UTC).isoformat()
+    name = payload.name.strip()
+    role = payload.role.strip()
+    company = payload.company.strip() if payload.company and payload.company.strip() else None
+    team_size = payload.team_size.strip() if payload.team_size and payload.team_size.strip() else None
+    source = payload.source.strip() or "landing_page"
+
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO pilot_leads (
+                id, team_id, name, email, role, company, team_size,
+                primary_pain, source, desired_followup, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(email) DO UPDATE SET
+                name = excluded.name,
+                team_id = excluded.team_id,
+                role = excluded.role,
+                company = excluded.company,
+                team_size = excluded.team_size,
+                primary_pain = excluded.primary_pain,
+                source = excluded.source,
+                desired_followup = excluded.desired_followup,
+                updated_at = excluded.updated_at
+            """,
+            (
+                str(uuid4()),
+                current_team_id(),
+                name,
+                email,
+                role,
+                company,
+                team_size,
+                payload.primary_pain.strip(),
+                source,
+                1 if payload.desired_followup else 0,
+                submitted_at,
+                submitted_at,
+            ),
+        )
+        row = connection.execute(
+            """
+            SELECT id, name, email, role, company, team_size, primary_pain,
+                   source, desired_followup, created_at, updated_at
+            FROM pilot_leads
+            WHERE email = ?
+            """,
+            (email,),
+        ).fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=500, detail="Pilot lead could not be saved.")
+
+    return pilot_lead_record_from_row(row)
+
+
+def pilot_lead_summary() -> PilotLeadSummaryResponse:
+    with incident_db_connection() as connection:
+        summary_row = connection.execute(
+            """
+            SELECT
+                COUNT(*) AS total_leads,
+                SUM(desired_followup) AS desired_followups
+            FROM pilot_leads
+            """,
+        ).fetchone()
+        recent_rows = connection.execute(
+            """
+            SELECT id, name, email, role, company, team_size, primary_pain,
+                   source, desired_followup, created_at, updated_at
+            FROM pilot_leads
+            ORDER BY updated_at DESC
+            LIMIT 6
+            """,
+        ).fetchall()
+
+    summary = dict(summary_row) if summary_row is not None else {}
+    return PilotLeadSummaryResponse(
+        total_leads=int(summary.get("total_leads", 0) or 0),
+        desired_followups=int(summary.get("desired_followups", 0) or 0),
+        recent_leads=[pilot_lead_record_from_row(row) for row in recent_rows],
     )
 
 
@@ -5889,6 +6066,11 @@ def production_monitoring_snapshot(request: Request) -> ProductionMonitoringResp
                 label="Beta feedback",
                 value=storage_table_count("beta_user_feedback", team_id),
                 detail="Real user feedback collected from the production readiness page.",
+            ),
+            ProductionMetric(
+                label="Pilot leads",
+                value=storage_table_count("pilot_leads"),
+                detail="Public visitor interest captured from the landing page.",
             ),
         ],
     )
@@ -12966,6 +13148,20 @@ def invite_saas_team_member(
 @app.get("/monitoring/status", response_model=ProductionMonitoringResponse)
 def production_monitoring_status(request: Request) -> ProductionMonitoringResponse:
     return production_monitoring_snapshot(request)
+
+
+@app.post("/pilot/leads", response_model=PilotLeadResponse)
+def submit_pilot_lead(payload: PilotLeadRequest) -> PilotLeadResponse:
+    lead = create_pilot_lead(payload)
+    return PilotLeadResponse(
+        message="Thanks. DevPilot captured your pilot interest.",
+        lead=lead,
+    )
+
+
+@app.get("/pilot/leads/summary", response_model=PilotLeadSummaryResponse)
+def list_pilot_leads() -> PilotLeadSummaryResponse:
+    return pilot_lead_summary()
 
 
 @app.get("/beta/feedback", response_model=BetaFeedbackSummaryResponse)
