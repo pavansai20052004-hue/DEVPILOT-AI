@@ -4,9 +4,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  Building2,
   CheckCircle2,
   GitBranch,
   Loader2,
+  Mail,
   RadioTower,
   RefreshCw,
   Rocket,
@@ -61,6 +63,26 @@ type BetaFeedbackSummary = {
   average_rating?: number | null;
   interested_pilots: number;
   recent_feedback: BetaFeedbackRecord[];
+};
+
+type PilotLeadRecord = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  company?: string | null;
+  team_size?: string | null;
+  primary_pain: string;
+  source: string;
+  desired_followup: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type PilotLeadSummary = {
+  total_leads: number;
+  desired_followups: number;
+  recent_leads: PilotLeadRecord[];
 };
 
 type FeedbackFormState = {
@@ -139,6 +161,7 @@ export function ProductionMonitoringPanel() {
   const { teamId } = useTeam();
   const [status, setStatus] = useState<ProductionMonitoringResponse | null>(null);
   const [feedbackSummary, setFeedbackSummary] = useState<BetaFeedbackSummary | null>(null);
+  const [leadSummary, setLeadSummary] = useState<PilotLeadSummary | null>(null);
   const [form, setForm] = useState<FeedbackFormState>(initialFormState);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -149,7 +172,7 @@ export function ProductionMonitoringPanel() {
     setIsLoading(true);
     try {
       const headers = devPilotTeamHeaders(teamId);
-      const [statusPayload, feedbackPayload] = await Promise.all([
+      const [statusPayload, feedbackPayload, leadPayload] = await Promise.all([
         apiRequest<ProductionMonitoringResponse>("/monitoring/status", {
           cache: "no-store",
           headers,
@@ -162,10 +185,17 @@ export function ProductionMonitoringPanel() {
           retries: 1,
           errorMessage: "Beta feedback is unavailable.",
         }),
+        apiRequest<PilotLeadSummary>("/pilot/leads/summary", {
+          cache: "no-store",
+          headers,
+          retries: 1,
+          errorMessage: "Pilot leads are unavailable.",
+        }),
       ]);
 
       setStatus(statusPayload);
       setFeedbackSummary(feedbackPayload);
+      setLeadSummary(leadPayload);
       setError(null);
     } catch (loadError) {
       setError(
@@ -200,8 +230,8 @@ export function ProductionMonitoringPanel() {
 
   const pilotLeadCount = useMemo(() => {
     const metric = status?.metrics.find((item) => item.label === "Pilot leads");
-    return metric?.value ?? 0;
-  }, [status]);
+    return leadSummary?.total_leads ?? metric?.value ?? 0;
+  }, [leadSummary, status]);
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -524,6 +554,87 @@ export function ProductionMonitoringPanel() {
               Save feedback
             </button>
           </form>
+        </div>
+      </section>
+
+      <section className="rounded-md border border-cyan-300/20 bg-white/[0.03] p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-md border border-cyan-300/25 bg-cyan-300/10">
+              <Building2 className="size-5 text-cyan-100" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-white">
+                Pilot lead inbox
+              </h2>
+              <p className="text-xs text-zinc-400">
+                {leadSummary?.desired_followups ?? 0} requested follow-up from the public landing page
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex h-9 w-fit items-center gap-2 rounded-md border border-emerald-300/25 bg-emerald-300/10 px-3 text-xs font-semibold text-emerald-100">
+            <Users className="size-3.5" aria-hidden="true" />
+            {leadSummary?.total_leads ?? 0} total leads
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {leadSummary?.recent_leads.length ? (
+            leadSummary.recent_leads.map((lead) => (
+              <article
+                key={lead.id}
+                className="rounded-md border border-white/10 bg-black/20 p-4"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">{lead.name}</h3>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {lead.role}
+                      {lead.company ? ` at ${lead.company}` : ""}
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                      lead.desired_followup
+                        ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+                        : "border-zinc-500/25 bg-white/[0.04] text-zinc-300"
+                    }`}
+                  >
+                    <RadioTower className="size-3.5" aria-hidden="true" />
+                    {lead.desired_followup ? "follow up" : "captured"}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-400">
+                  <a
+                    href={`mailto:${lead.email}`}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 font-medium text-cyan-100 transition hover:border-cyan-300/30"
+                  >
+                    <Mail className="size-3.5" aria-hidden="true" />
+                    {lead.email}
+                  </a>
+                  {lead.team_size ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1">
+                      <Users className="size-3.5" aria-hidden="true" />
+                      {lead.team_size}
+                    </span>
+                  ) : null}
+                </div>
+
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  {lead.primary_pain}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                  <span>Source: {lead.source.replaceAll("_", " ")}</span>
+                  <span>{formatDate(lead.updated_at)}</span>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-md border border-dashed border-white/15 bg-black/20 p-6 text-sm text-zinc-400 lg:col-span-2">
+              No pilot leads yet. The public landing form will populate this inbox.
+            </div>
+          )}
         </div>
       </section>
 
