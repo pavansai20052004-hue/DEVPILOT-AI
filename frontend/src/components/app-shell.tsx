@@ -52,6 +52,7 @@ const navIcons: Record<string, typeof Activity> = {
   "/security": ShieldCheck,
   "/cost": DollarSign,
   "/plugins": Puzzle,
+  "/monitoring": RadioTower,
   "/demo": Activity,
   "/account": Building2,
 };
@@ -60,8 +61,8 @@ const mobilePrimaryHrefs = new Set([
   "/dashboard",
   "/logs",
   "/auto-heal",
+  "/monitoring",
   "/security",
-  "/demo",
 ]);
 
 const mobileNavigation = flatNavigation.filter((item) =>

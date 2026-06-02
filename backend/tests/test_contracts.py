@@ -264,6 +264,80 @@ def test_auth_integrations_readiness_reports_real_smtp_and_sso_requirements(
     assert ready_payload["sso"]["provider_name"] == "Test Company SSO"
 
 
+def test_monitoring_status_reports_production_readiness_components(
+    client: TestClient,
+) -> None:
+    bootstrap_admin(client)
+
+    response = client.get("/monitoring/status")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["environment"] == "development"
+    assert payload["storage"] == "sqlite"
+    assert payload["uptime_seconds"] >= 0
+    assert payload["frontend_url"] == "http://127.0.0.1:3000"
+    component_ids = {component["id"] for component in payload["components"]}
+    assert {
+        "api",
+        "database",
+        "frontend",
+        "ci_cd",
+        "smtp",
+        "sso",
+        "openai",
+        "github",
+        "slack",
+    }.issubset(component_ids)
+    assert any(
+        component["id"] == "ci_cd" and component["status"] == "operational"
+        for component in payload["components"]
+    )
+    metric_labels = {metric["label"] for metric in payload["metrics"]}
+    assert {
+        "Registered users",
+        "Teams",
+        "Incidents stored",
+        "Agent actions",
+        "Beta feedback",
+    }.issubset(metric_labels)
+
+
+def test_beta_feedback_flow_collects_real_user_feedback(
+    client: TestClient,
+) -> None:
+    _, headers = bootstrap_admin(client)
+
+    submit_response = client.post(
+        "/beta/feedback",
+        headers=headers,
+        json={
+            "name": "Platform Lead",
+            "email": "Lead@Example.com",
+            "role": "Head of DevOps",
+            "company": "Example Cloud",
+            "rating": 5,
+            "feedback": "DevPilot would save our incident response team real time.",
+            "interested_in_pilot": True,
+        },
+    )
+
+    assert submit_response.status_code == 200, submit_response.text
+    submitted = submit_response.json()["feedback"]
+    assert submitted["email"] == "lead@example.com"
+    assert submitted["rating"] == 5
+    assert submitted["interested_in_pilot"] is True
+
+    summary_response = client.get("/beta/feedback")
+
+    assert summary_response.status_code == 200, summary_response.text
+    summary = summary_response.json()
+    assert summary["total_feedback"] == 1
+    assert summary["average_rating"] == 5.0
+    assert summary["interested_pilots"] == 1
+    assert summary["recent_feedback"][0]["email"] == "lead@example.com"
+
+
 def test_sso_start_redirects_to_oidc_provider(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

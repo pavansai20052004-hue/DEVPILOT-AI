@@ -40,6 +40,7 @@ const appRoutes = [
   { href: "/security", label: "Security" },
   { href: "/cost", label: "Cloud Cost" },
   { href: "/plugins", label: "Plugins" },
+  { href: "/monitoring", label: "Production Monitoring" },
   { href: "/demo", label: "Demo Mode" },
 ];
 

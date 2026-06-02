@@ -108,6 +108,13 @@ npm run build
 npm run test:e2e
 ```
 
+### CI/CD, Monitoring, and User Feedback
+
+- GitHub Actions CI is defined in `.github/workflows/ci.yml`. It runs backend contract tests, dependency health checks, frontend lint, production build, Playwright E2E, and a high-severity npm audit gate on pull requests and pushes to `main`.
+- Scheduled production smoke checks are defined in `.github/workflows/production-smoke.yml`. They verify the live Vercel frontend routes, Render `/health` and `/ready`, and public auth/SSO configuration endpoints every six hours.
+- The authenticated app includes `Production Monitoring` at `/monitoring`. It shows API uptime, storage mode, frontend/backend URLs, SMTP, SSO, OpenAI, GitHub, Slack, CI/CD, and database readiness.
+- The monitoring page also captures beta user feedback into the backend database, giving DevPilot a real pilot-user pipeline instead of a static demo form.
+
 Docker:
 
 ```bash
@@ -212,6 +219,8 @@ NEXT_PUBLIC_ENABLE_LIVE_K8S_TWIN=false
 ## Key Files
 
 - `backend/main.py` - FastAPI API and incident workflows
+- `.github/workflows/ci.yml` - pull request and main branch quality gate
+- `.github/workflows/production-smoke.yml` - scheduled live deployment checks
 - `backend/Dockerfile` - backend container build
 - `backend/railway.toml` - Railway deployment config
 - `render.yaml` - Render backend Blueprint using a Neon `DATABASE_URL` secret

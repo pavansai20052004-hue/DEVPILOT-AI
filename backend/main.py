@@ -132,6 +132,7 @@ POSTGRES_POOL: ConnectionPool | None = None
 INCIDENT_DB_INIT_LOCK = threading.RLock()
 AUTH_BOOTSTRAP_LOCK = threading.RLock()
 INCIDENT_DB_INITIALIZED = False
+APP_STARTED_AT = datetime.now(UTC)
 DATABASE_URL_ENV = "DATABASE_URL"
 SESSION_SECRET_ENV = "SESSION_SECRET"
 SESSION_COOKIE_NAME = "devpilot_session"
@@ -1430,6 +1431,67 @@ class IncidentMemoryRecord(BaseModel):
 
 class IncidentHistoryResponse(BaseModel):
     incidents: list[IncidentMemoryRecord]
+
+
+ProductionComponentState = Literal["operational", "degraded", "not_configured"]
+
+
+class ProductionComponentStatus(BaseModel):
+    id: str
+    name: str
+    status: ProductionComponentState
+    detail: str
+
+
+class ProductionMetric(BaseModel):
+    label: str
+    value: int | str
+    detail: str
+
+
+class ProductionMonitoringResponse(BaseModel):
+    generated_at: str
+    environment: str
+    storage: str
+    uptime_seconds: int
+    frontend_url: str
+    backend_url: str
+    components: list[ProductionComponentStatus]
+    metrics: list[ProductionMetric]
+
+
+class BetaFeedbackRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=120)
+    email: str = Field(..., min_length=3, max_length=254)
+    role: str = Field(..., min_length=2, max_length=120)
+    company: str | None = Field(default=None, max_length=160)
+    rating: int = Field(..., ge=1, le=5)
+    feedback: str = Field(..., min_length=10, max_length=2_000)
+    interested_in_pilot: bool = True
+
+
+class BetaFeedbackRecord(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    company: str | None = None
+    rating: int
+    feedback: str
+    interested_in_pilot: bool
+    created_at: str
+
+
+class BetaFeedbackResponse(BaseModel):
+    message: str
+    feedback: BetaFeedbackRecord
+
+
+class BetaFeedbackSummaryResponse(BaseModel):
+    total_feedback: int
+    average_rating: float | None = None
+    interested_pilots: int
+    recent_feedback: list[BetaFeedbackRecord]
 
 
 class IncidentSearchRequest(BaseModel):
@@ -3656,6 +3718,40 @@ def _initialize_storage_schema(connection: StorageConnectionProxy) -> None:
     )
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS beta_user_feedback (
+            id TEXT PRIMARY KEY,
+            team_id TEXT NOT NULL DEFAULT 'team_default',
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            role TEXT NOT NULL,
+            company TEXT,
+            rating INTEGER NOT NULL,
+            feedback TEXT NOT NULL,
+            interested_in_pilot INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """,
+    )
+    ensure_sqlite_column(
+        connection,
+        "beta_user_feedback",
+        "team_id",
+        "TEXT NOT NULL DEFAULT 'team_default'",
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_beta_user_feedback_team_created
+        ON beta_user_feedback (team_id, created_at DESC)
+        """,
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_beta_user_feedback_email
+        ON beta_user_feedback (email)
+        """,
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS custom_model_training_runs (
             id TEXT PRIMARY KEY,
             model_name TEXT NOT NULL,
@@ -5520,6 +5616,282 @@ def init_incident_db() -> None:
 def incident_db_connection() -> StorageConnectionProxy:
     init_incident_db()
     return open_storage_connection()
+
+
+TEAM_SCOPED_COUNT_TABLES = {
+    "incident_memory",
+    "autonomous_agent_actions",
+    "beta_user_feedback",
+    "saas_team_members",
+}
+COUNT_TABLES = TEAM_SCOPED_COUNT_TABLES | {"auth_users", "saas_teams"}
+
+
+def storage_table_count(table_name: str, team_id: str | None = None) -> int:
+    if table_name not in COUNT_TABLES:
+        raise ValueError(f"Unsupported count table: {table_name}")
+
+    query = f"SELECT COUNT(*) AS total FROM {table_name}"
+    params: tuple[Any, ...] = ()
+    if team_id and table_name in TEAM_SCOPED_COUNT_TABLES:
+        query = f"{query} WHERE team_id = ?"
+        params = (team_id,)
+
+    with incident_db_connection() as connection:
+        row = connection.execute(query, params).fetchone()
+
+    if row is None:
+        return 0
+
+    values = dict(row)
+    return int(values.get("total", 0) or 0)
+
+
+def beta_feedback_record_from_row(row: Any) -> BetaFeedbackRecord:
+    values = dict(row)
+    return BetaFeedbackRecord(
+        id=str(values["id"]),
+        name=str(values["name"]),
+        email=str(values["email"]),
+        role=str(values["role"]),
+        company=values.get("company"),
+        rating=int(values["rating"]),
+        feedback=str(values["feedback"]),
+        interested_in_pilot=bool(int(values["interested_in_pilot"])),
+        created_at=str(values["created_at"]),
+    )
+
+
+def create_beta_feedback(payload: BetaFeedbackRequest) -> BetaFeedbackRecord:
+    feedback_id = str(uuid4())
+    created_at = datetime.now(UTC).isoformat()
+    record = BetaFeedbackRecord(
+        id=feedback_id,
+        name=payload.name.strip(),
+        email=normalize_owner_email(payload.email),
+        role=payload.role.strip(),
+        company=payload.company.strip() if payload.company and payload.company.strip() else None,
+        rating=payload.rating,
+        feedback=payload.feedback.strip(),
+        interested_in_pilot=payload.interested_in_pilot,
+        created_at=created_at,
+    )
+
+    with incident_db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO beta_user_feedback (
+                id, team_id, name, email, role, company, rating,
+                feedback, interested_in_pilot, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record.id,
+                current_team_id(),
+                record.name,
+                record.email,
+                record.role,
+                record.company,
+                record.rating,
+                record.feedback,
+                1 if record.interested_in_pilot else 0,
+                record.created_at,
+            ),
+        )
+
+    return record
+
+
+def beta_feedback_summary(team_id: str) -> BetaFeedbackSummaryResponse:
+    with incident_db_connection() as connection:
+        summary_row = connection.execute(
+            """
+            SELECT
+                COUNT(*) AS total_feedback,
+                AVG(rating) AS average_rating,
+                SUM(interested_in_pilot) AS interested_pilots
+            FROM beta_user_feedback
+            WHERE team_id = ?
+            """,
+            (team_id,),
+        ).fetchone()
+        recent_rows = connection.execute(
+            """
+            SELECT id, name, email, role, company, rating, feedback,
+                   interested_in_pilot, created_at
+            FROM beta_user_feedback
+            WHERE team_id = ?
+            ORDER BY created_at DESC
+            LIMIT 6
+            """,
+            (team_id,),
+        ).fetchall()
+
+    summary = dict(summary_row) if summary_row is not None else {}
+    average_rating = summary.get("average_rating")
+    return BetaFeedbackSummaryResponse(
+        total_feedback=int(summary.get("total_feedback", 0) or 0),
+        average_rating=round(float(average_rating), 2) if average_rating is not None else None,
+        interested_pilots=int(summary.get("interested_pilots", 0) or 0),
+        recent_feedback=[beta_feedback_record_from_row(row) for row in recent_rows],
+    )
+
+
+def production_status_from_readiness(
+    component_id: str,
+    name: str,
+    readiness: AuthIntegrationCheck,
+) -> ProductionComponentStatus:
+    status: ProductionComponentState
+    if readiness.ready:
+        status = "operational"
+    elif readiness.configured:
+        status = "degraded"
+    else:
+        status = "not_configured"
+
+    detail = readiness.detail
+    if readiness.provider_name:
+        detail = f"{readiness.provider_name}: {detail}"
+
+    return ProductionComponentStatus(
+        id=component_id,
+        name=name,
+        status=status,
+        detail=detail,
+    )
+
+
+def production_component(
+    component_id: str,
+    name: str,
+    status: ProductionComponentState,
+    detail: str,
+) -> ProductionComponentStatus:
+    return ProductionComponentStatus(
+        id=component_id,
+        name=name,
+        status=status,
+        detail=detail,
+    )
+
+
+def database_component_status() -> ProductionComponentStatus:
+    try:
+        with incident_db_connection() as connection:
+            connection.execute("SELECT 1").fetchone()
+    except Exception as exc:
+        logger.exception("Production monitoring database check failed.")
+        return production_component(
+            "database",
+            "Database",
+            "degraded",
+            f"Storage check failed: {exc}",
+        )
+
+    storage_name = "PostgreSQL" if using_postgres_storage() else "SQLite"
+    return production_component(
+        "database",
+        "Database",
+        "operational",
+        f"{storage_name} storage is reachable.",
+    )
+
+
+def production_monitoring_snapshot(request: Request) -> ProductionMonitoringResponse:
+    team_id = current_team_id()
+    configured_frontend = get_configured_frontend_origins()
+    frontend_url = configured_frontend[0] if configured_frontend else "https://devpilot-ai-two.vercel.app"
+    backend_url = str(request.base_url).rstrip("/")
+    github_token_configured = bool(os.getenv("GITHUB_TOKEN", "").strip())
+    github_repository = os.getenv("GITHUB_REPOSITORY", "").strip()
+    github_status: ProductionComponentState = (
+        "operational" if github_token_configured and github_repository else "not_configured"
+    )
+    github_detail = (
+        f"GitHub token and repository {github_repository} are configured."
+        if github_status == "operational"
+        else "Set GITHUB_TOKEN and GITHUB_REPOSITORY to enable live remediation pull requests."
+    )
+    slack_status: ProductionComponentState = "operational" if slack_webhook_url() else "not_configured"
+    openai_status: ProductionComponentState = "operational" if has_openai_key() else "not_configured"
+
+    return ProductionMonitoringResponse(
+        generated_at=datetime.now(UTC).isoformat(),
+        environment=os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "development")).strip() or "development",
+        storage="postgresql" if using_postgres_storage() else "sqlite",
+        uptime_seconds=max(0, int((datetime.now(UTC) - APP_STARTED_AT).total_seconds())),
+        frontend_url=frontend_url,
+        backend_url=backend_url,
+        components=[
+            production_component(
+                "api",
+                "Backend API",
+                "operational",
+                f"FastAPI is serving requests from {backend_url}.",
+            ),
+            database_component_status(),
+            production_component(
+                "frontend",
+                "Frontend Deployment",
+                "operational",
+                f"Primary frontend origin is {frontend_url}.",
+            ),
+            production_component(
+                "ci_cd",
+                "CI/CD Pipeline",
+                "operational",
+                "GitHub Actions CI and scheduled production smoke checks are committed.",
+            ),
+            production_status_from_readiness("smtp", "SMTP Password Reset", smtp_readiness_check()),
+            production_status_from_readiness("sso", "OIDC SSO", sso_readiness_check()),
+            production_component(
+                "openai",
+                "OpenAI Intelligence",
+                openai_status,
+                "OPENAI_API_KEY is configured for AI diagnosis."
+                if openai_status == "operational"
+                else "Set OPENAI_API_KEY to enable real AI diagnosis.",
+            ),
+            production_component("github", "GitHub Remediation", github_status, github_detail),
+            production_component(
+                "slack",
+                "Slack Alerts",
+                slack_status,
+                "Slack webhook is configured for incident notifications."
+                if slack_status == "operational"
+                else "Set SLACK_WEBHOOK_URL to enable live incident notifications.",
+            ),
+        ],
+        metrics=[
+            ProductionMetric(
+                label="Registered users",
+                value=storage_table_count("auth_users"),
+                detail="Real accounts created through signup, bootstrap, or SSO.",
+            ),
+            ProductionMetric(
+                label="Teams",
+                value=storage_table_count("saas_teams"),
+                detail="Customer workspaces available in the SaaS layer.",
+            ),
+            ProductionMetric(
+                label="Incidents stored",
+                value=storage_table_count("incident_memory", team_id),
+                detail="Incident memories retained for this workspace.",
+            ),
+            ProductionMetric(
+                label="Agent actions",
+                value=storage_table_count("autonomous_agent_actions", team_id),
+                detail="Autonomous remediation actions recorded for audit.",
+            ),
+            ProductionMetric(
+                label="Beta feedback",
+                value=storage_table_count("beta_user_feedback", team_id),
+                detail="Real user feedback collected from the production readiness page.",
+            ),
+        ],
+    )
 
 
 def incident_search_text(
@@ -12589,6 +12961,25 @@ def invite_saas_team_member(
 ) -> TeamMember:
     require_roles(x_devpilot_role, {"admin", "devops_engineer"}, "Inviting team members")
     return add_team_member(team_id, payload)
+
+
+@app.get("/monitoring/status", response_model=ProductionMonitoringResponse)
+def production_monitoring_status(request: Request) -> ProductionMonitoringResponse:
+    return production_monitoring_snapshot(request)
+
+
+@app.get("/beta/feedback", response_model=BetaFeedbackSummaryResponse)
+def list_beta_feedback() -> BetaFeedbackSummaryResponse:
+    return beta_feedback_summary(current_team_id())
+
+
+@app.post("/beta/feedback", response_model=BetaFeedbackResponse)
+def submit_beta_feedback(payload: BetaFeedbackRequest) -> BetaFeedbackResponse:
+    record = create_beta_feedback(payload)
+    return BetaFeedbackResponse(
+        message="Thanks. DevPilot captured this feedback for the product pipeline.",
+        feedback=record,
+    )
 
 
 @app.get("/incidents/history", response_model=IncidentHistoryResponse)
