@@ -31,6 +31,9 @@ jobs:
           done
           curl -fsS -L https://devpilot-ai-two.vercel.app/ -o /tmp/devpilot-home.html
           grep -qi "Request pilot access" /tmp/devpilot-home.html
+          ! grep -qiE "Run Demo|Demo Mode|Judge Mode" /tmp/devpilot-home.html
+          demo_status="$(curl -sS -L -o /tmp/devpilot-demo.html -w "%{http_code}" "https://devpilot-ai-two.vercel.app/demo")"
+          test "$demo_status" = "404"
 
       - name: Check backend readiness
         shell: bash
@@ -57,3 +60,4 @@ jobs:
           grep -q '"authenticated":false' /tmp/session.json
           grep -q '"provider_name"' /tmp/sso.json
           grep -q '"/pilot/leads"' /tmp/openapi.json
+          ! grep -q '"/demo/run"' /tmp/openapi.json
