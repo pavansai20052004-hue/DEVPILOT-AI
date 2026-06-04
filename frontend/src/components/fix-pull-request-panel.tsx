@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Cloud,
@@ -14,7 +14,6 @@ import {
 import { useRole } from "@/components/role-provider";
 import { RetryNotice } from "@/components/retry-notice";
 import { apiRequest } from "@/lib/api-client";
-import { DemoCiFailure, subscribeToDemoRuns } from "@/lib/demo-mode";
 import { devPilotRoleHeaders } from "@/lib/rbac";
 
 type CloudProvider = "aws" | "azure" | "gcp";
@@ -129,7 +128,6 @@ export function FixPullRequestPanel() {
   const [baseBranch, setBaseBranch] = useState("main");
   const [generatedFiles, setGeneratedFiles] = useState<FixFiles | null>(null);
   const [pullRequest, setPullRequest] = useState<PullRequestResult | null>(null);
-  const [demoCiFailures, setDemoCiFailures] = useState<DemoCiFailure[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,24 +146,6 @@ export function FixPullRequestPanel() {
   );
   const canGenerateFixes = can("generate_fixes");
   const canCreatePullRequests = can("create_pull_requests");
-
-  useEffect(
-    () =>
-      subscribeToDemoRuns((payload) => {
-        setIssue(payload.detected_issue);
-        setSelectedProvider(payload.fix_files.cloud_provider);
-        setRepository("demo/devpilot-ai");
-        setBaseBranch("main");
-        setGeneratedFiles(payload.fix_files);
-        setDemoCiFailures(payload.cicd_failures);
-        setPullRequest(null);
-        setError(null);
-        setLastFailedAction(null);
-        setIsGenerating(false);
-        setIsCreatingPr(false);
-      }),
-    [],
-  );
 
   async function generateFixFiles() {
     const trimmedIssue = issue.trim();
@@ -335,7 +315,6 @@ export function FixPullRequestPanel() {
                     onClick={() => {
                       setSelectedProvider(provider.id);
                       setGeneratedFiles(null);
-                      setDemoCiFailures([]);
                       setPullRequest(null);
                       setError(null);
                       setLastFailedAction(null);
@@ -373,7 +352,6 @@ export function FixPullRequestPanel() {
             onChange={(event) => {
               setIssue(event.target.value);
               setGeneratedFiles(null);
-              setDemoCiFailures([]);
               setPullRequest(null);
               setError(null);
               setLastFailedAction(null);
@@ -499,37 +477,6 @@ export function FixPullRequestPanel() {
                     {pullRequest.branch_name} to {pullRequest.base_branch}
                   </p>
                 </div>
-              </div>
-            </div>
-          ) : null}
-
-          {demoCiFailures.length ? (
-            <div className="mt-5 rounded-md border border-amber-300/20 bg-amber-300/10 p-4">
-              <p className="text-sm font-semibold text-amber-50">
-                Demo CI/CD Failures
-              </p>
-              <div className="mt-3 grid gap-3">
-                {demoCiFailures.map((failure) => (
-                  <div
-                    key={`${failure.workflow}:${failure.job}`}
-                    className="rounded-md border border-amber-200/20 bg-[#07090b] p-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-white">
-                        {failure.workflow} / {failure.job}
-                      </p>
-                      <span className="rounded-md border border-amber-200/25 px-2 py-1 font-mono text-xs uppercase text-amber-100">
-                        {failure.status}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-amber-50/75">
-                      {failure.failure_summary}
-                    </p>
-                    <pre className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/25 p-3 font-mono text-xs leading-5 text-zinc-300">
-                      {previewContent(failure.logs)}
-                    </pre>
-                  </div>
-                ))}
               </div>
             </div>
           ) : null}

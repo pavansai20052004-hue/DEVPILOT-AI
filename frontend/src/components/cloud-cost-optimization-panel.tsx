@@ -254,7 +254,7 @@ export function CloudCostOptimizationPanel() {
         generated_at: new Date().toISOString(),
       });
       setUsingDemoData(true);
-      setError("Using demo cost estimates until the cloud cost API is reachable.");
+      setError("Using baseline cost estimates until the cloud cost API is reachable.");
     } finally {
       setIsLoading(false);
     }
@@ -358,7 +358,7 @@ export function CloudCostOptimizationPanel() {
             {isLoading
               ? "Analyzing inventory"
               : usingDemoData
-                ? "Demo estimate"
+                ? "Baseline estimate"
                 : `Updated ${updatedAt}`}
           </span>
         </div>

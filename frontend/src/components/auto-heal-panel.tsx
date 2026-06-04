@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   CheckCircle2,
   Lock,
@@ -13,7 +13,6 @@ import {
 import { useRole } from "@/components/role-provider";
 import { RetryNotice } from "@/components/retry-notice";
 import { apiRequest } from "@/lib/api-client";
-import { subscribeToDemoRuns } from "@/lib/demo-mode";
 import { devPilotRoleHeaders } from "@/lib/rbac";
 
 type HealAction = {
@@ -41,16 +40,6 @@ export function AutoHealPanel() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<HealResult | null>(null);
   const canRunAutoHeal = can("run_auto_heal");
-
-  useEffect(
-    () =>
-      subscribeToDemoRuns((payload) => {
-        setResult(payload.auto_heal);
-        setError(null);
-        setIsHealing(false);
-      }),
-    [],
-  );
 
   async function runAutoHeal() {
     if (!canRunAutoHeal) {

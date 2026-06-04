@@ -114,7 +114,7 @@ const pricingPlans = [
     name: "Free",
     price: "$0",
     cadence: "/mo",
-    description: "For demos, local proof of concept, and early evaluator workflows.",
+    description: "For individual founders, local proof of concept, and early production evaluation.",
     features: ["250 API requests", "25 AI actions", "5 recovery actions", "1 team member"],
   },
   {
@@ -148,7 +148,7 @@ const testimonials = [
   },
   {
     quote:
-      "The demo clicked because it did not stop at charts. It moved from failure signal to a reviewed recovery action.",
+      "The product clicked because it did not stop at charts. It moved from failure signal to a reviewed recovery action.",
     name: "Platform Lead",
     company: "Cloud-native health tech",
   },
@@ -411,10 +411,10 @@ export default function Home() {
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
               <Link
-                href="/demo"
+                href="/dashboard"
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-cyan-300/40 bg-cyan-300 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-200"
               >
-                Run Demo Mode
+                Open Control Plane
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Link>
               <Link

@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -22,11 +21,6 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import {
-  DemoRunPayload,
-  readDemoRunPayload,
-  subscribeToDemoRuns,
-} from "@/lib/demo-mode";
 import { API_BASE_URL } from "@/lib/api-client";
 
 type VoiceAssistantResponse = {
@@ -119,60 +113,13 @@ function unsupportedBrowserSnapshot() {
   return false;
 }
 
-function formatNarratorAction(action: string) {
-  return action.replaceAll("_", " ");
-}
-
-function joinFriendlyList(items: string[]) {
-  if (items.length <= 1) {
-    return items[0] ?? "";
-  }
-
-  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
-}
-
-function buildDemoNarratorBriefing(payload: DemoRunPayload): NarratorBriefing {
-  const unhealthyPods = payload.cluster_status.unhealthy_pods.length;
-  const ciFailures = payload.cicd_failures.length;
-  const actions = payload.auto_heal.actions.map((action) =>
-    formatNarratorAction(action.action),
-  );
-  const actionSummary = joinFriendlyList(actions);
-  const fix = payload.analysis.recommended_fix;
-  const incident = payload.analysis.root_cause;
-
-  return {
-    headline: payload.detected_issue,
-    incident,
-    fix,
-    narration: [
-      "Hi, I am DevPilot, your incident narrator.",
-      `I found a ${payload.analysis.severity} deployment incident.`,
-      incident,
-      `The strongest signals were ${unhealthyPods} unhealthy Kubernetes pod${unhealthyPods === 1 ? "" : "s"} and ${ciFailures} failed CI check${ciFailures === 1 ? "" : "s"}.`,
-      actionSummary ? `I applied the recovery plan: ${actionSummary}.` : "",
-      `The fix was: ${fix}`,
-      "The demo is ready for review.",
-    ]
-      .filter(Boolean)
-      .join(" "),
-    stats: [
-      `${unhealthyPods} unhealthy pod${unhealthyPods === 1 ? "" : "s"}`,
-      `${ciFailures} CI failure${ciFailures === 1 ? "" : "s"}`,
-      `${payload.auto_heal.actions.length} recovery action${
-        payload.auto_heal.actions.length === 1 ? "" : "s"
-      }`,
-    ],
-  };
-}
-
 function defaultNarratorBriefing(): NarratorBriefing {
   return {
     headline: "DevPilot narrator is ready",
-    incident: "Run the demo to load the latest incident narrative.",
-    fix: "The applied fix will appear here after the demo run completes.",
+    incident: "Ask about a live incident or load a recent incident narrative.",
+    fix: "The applied fix will appear here after an incident workflow completes.",
     narration:
-      "Hi, I am DevPilot, your incident narrator. Run the demo and I will explain what failed, what fix was applied, and what recovered.",
+      "Hi, I am DevPilot, your incident narrator. Ask me about an incident and I will explain what failed, what fix was applied, and what recovered.",
     stats: ["Incident pending", "Fix pending", "Voice ready"],
   };
 }
@@ -205,10 +152,8 @@ function selectFriendlyNarratorVoice(voices: SpeechSynthesisVoice[]) {
 
 export function VoiceAssistantPanel() {
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
-  const narratedRunRef = useRef<string | null>(null);
   const [question, setQuestion] = useState("Why did deployment fail?");
   const [response, setResponse] = useState<VoiceAssistantResponse | null>(null);
-  const [demoPayload, setDemoPayload] = useState<DemoRunPayload | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -224,27 +169,17 @@ export function VoiceAssistantPanel() {
     speechSynthesisSupportSnapshot,
     unsupportedBrowserSnapshot,
   );
-  const narratorBriefing = useMemo(
-    () =>
-      demoPayload
-        ? buildDemoNarratorBriefing(demoPayload)
-        : defaultNarratorBriefing(),
-    [demoPayload],
-  );
+  const narratorBriefing = defaultNarratorBriefing();
   const narratorState = isSpeaking
     ? "Speaking"
     : isListening
       ? "Listening"
       : isAsking
         ? "Thinking"
-        : demoPayload
-          ? "Ready"
-          : "Standby";
+        : "Standby";
   const narratorStateClass = isSpeaking
     ? "border-cyan-300/30 bg-cyan-300/10 text-cyan-100"
-    : demoPayload
-      ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
-      : "border-zinc-500/25 bg-white/5 text-zinc-300";
+    : "border-zinc-500/25 bg-white/5 text-zinc-300";
   const audioBars = isSpeaking
     ? ["h-3", "h-6", "h-4", "h-7", "h-5", "h-8", "h-4", "h-6"]
     : ["h-3", "h-4", "h-3", "h-5", "h-3", "h-4", "h-3", "h-5"];
@@ -348,31 +283,6 @@ export function VoiceAssistantPanel() {
       window.speechSynthesis.removeEventListener("voiceschanged", updateVoiceName);
     };
   }, [speechSupported]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDemoPayload(readDemoRunPayload());
-    }, 0);
-    const unsubscribe = subscribeToDemoRuns((payload) => {
-      setDemoPayload(payload);
-      setResponse(null);
-      setQuestion("Explain the latest demo incident and what fix was applied.");
-
-      if (narratedRunRef.current === payload.ran_at) {
-        return;
-      }
-
-      narratedRunRef.current = payload.ran_at;
-      window.setTimeout(() => {
-        speak(buildDemoNarratorBriefing(payload).narration);
-      }, 350);
-    });
-
-    return () => {
-      window.clearTimeout(timer);
-      unsubscribe();
-    };
-  }, [speak]);
 
   async function askAssistant() {
     const trimmedQuestion = question.trim();

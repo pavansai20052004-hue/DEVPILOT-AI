@@ -43,7 +43,6 @@ const appRoutes = [
   { href: "/cost", label: "Cloud Cost" },
   { href: "/plugins", label: "Plugins" },
   { href: "/monitoring", label: "Production Monitoring" },
-  { href: "/demo", label: "Demo Mode" },
 ];
 
 test.describe.configure({ timeout: liveRun ? 420_000 : 120_000 });
@@ -112,29 +111,15 @@ async function clickEnabled(locator: Locator) {
   await locator.click();
 }
 
-async function runDemo(page: Page) {
-  await gotoAppRoute(page, "/demo");
-  await expectRouteHeading(page, "Demo Mode");
-  const demoButton = page
-    .locator("#demo-mode")
-    .getByRole("button", { name: /run demo|demo loaded/i });
-  if (await isVisible(page.locator("#demo-mode").getByRole("button", { name: /run demo/i }))) {
-    await demoButton.click();
-  }
-  await expect(
-    page.locator("#demo-mode").getByRole("button", { name: /demo loaded/i }),
-  ).toBeVisible({ timeout: expectTimeout });
-}
-
 async function mockPullRequestCreation(page: Page) {
   await page.route("**/github/create-pull-request", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        repository: "demo/devpilot-ai",
+        repository: "acme/devpilot-ai",
         pull_request_number: 42,
-        pull_request_url: "https://github.com/demo/devpilot-ai/pull/42",
+        pull_request_url: "https://github.com/acme/devpilot-ai/pull/42",
         branch_name: "devpilot/fix-crashloop",
         base_branch: "main",
         files: [
@@ -142,7 +127,7 @@ async function mockPullRequestCreation(page: Page) {
             path: "Dockerfile",
             status: "created",
             sha: "abc123",
-            html_url: "https://github.com/demo/devpilot-ai/blob/devpilot/fix-crashloop/Dockerfile",
+            html_url: "https://github.com/acme/devpilot-ai/blob/devpilot/fix-crashloop/Dockerfile",
           },
         ],
       }),
@@ -222,7 +207,6 @@ test("button matrix renders every authenticated route", async ({ page }) => {
 
 test("operate buttons stay within safe local workflows", async ({ page }) => {
   await authenticateFirstOwner(page);
-  await runDemo(page);
 
   await gotoAppRoute(page, "/dashboard");
   await expectRouteHeading(page, "Incident Dashboard");
@@ -245,12 +229,12 @@ test("operate buttons stay within safe local workflows", async ({ page }) => {
 
   await gotoAppRoute(page, "/kubernetes");
   await expectRouteHeading(page, "Kubernetes");
-  await clickEnabled(page.getByRole("button", { name: /load demo cluster/i }));
-  await expect(page.getByText(/demo cluster loaded/i)).toBeVisible();
+  await clickEnabled(page.getByRole("button", { name: /load sample cluster/i }));
+  await expect(page.getByText(/sample cluster loaded/i)).toBeVisible();
   await clickEnabled(page.getByRole("button", { name: /restart pod/i }).first());
-  await expect(page.getByText(/demo restart completed/i)).toBeVisible();
+  await expect(page.getByText(/sample restart completed/i)).toBeVisible();
   await clickEnabled(page.getByRole("button", { name: /^rollback$/i }).first());
-  await expect(page.getByText(/demo rollback completed/i)).toBeVisible();
+  await expect(page.getByText(/sample rollback completed/i)).toBeVisible();
 
   await gotoAppRoute(page, "/auto-heal");
   await expectRouteHeading(page, "Auto Heal");
@@ -329,13 +313,13 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
 
   await gotoAppRoute(page, "/fix-pr");
   await expectRouteHeading(page, "Fix Pull Request");
-  await page.getByLabel("Repository").fill("demo/devpilot-ai");
+  await page.getByLabel("Repository").fill("acme/devpilot-ai");
   await clickEnabled(page.getByRole("button", { name: /generate files/i }));
   await expect(page.getByText("Generated Files", { exact: true }).last()).toBeVisible({
     timeout: expectTimeout,
   });
   await clickEnabled(page.getByRole("button", { name: /create pr/i }));
-  await expect(page.getByText(/pull request opened in demo\/devpilot-ai\./i)).toBeVisible({
+  await expect(page.getByText(/pull request opened in acme\/devpilot-ai\./i)).toBeVisible({
     timeout: expectTimeout,
   });
 
@@ -351,7 +335,7 @@ test("ai and remediation buttons use fallback or mocked side effects", async ({ 
   await expect(page.getByText(/auto-heal executed/i)).toBeVisible({ timeout: expectTimeout });
 });
 
-test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
+test("enterprise and voice controls are clickable", async ({ page }) => {
   await installVoiceMocks(page);
   await authenticateFirstOwner(page);
 
@@ -415,15 +399,6 @@ test("enterprise, demo, and voice controls are clickable", async ({ page }) => {
     });
     await expect(updateButtons.first()).toBeVisible({ timeout: expectTimeout });
   }
-
-  await gotoAppRoute(page, "/demo");
-  await expectRouteHeading(page, "Demo Mode");
-  await clickEnabled(page.locator("#demo-mode").getByRole("button", { name: /run demo/i }));
-  await expect(
-    page.locator("#demo-mode").getByRole("button", { name: /demo loaded/i }),
-  ).toBeVisible({ timeout: expectTimeout });
-  await clickEnabled(page.locator("#judge-mode").getByRole("button", { name: /judge mode/i }));
-  await expect(page.getByText(/elapsed/i)).toBeVisible({ timeout: expectTimeout });
 
   await gotoAppRoute(page, "/voice");
   await expectRouteHeading(page, "Voice Assistant");

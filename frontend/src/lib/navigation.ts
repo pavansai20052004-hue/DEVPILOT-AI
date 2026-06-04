@@ -123,11 +123,6 @@ export const navigationGroups: NavigationGroup[] = [
         label: "Production Monitoring",
         description: "Track CI/CD, uptime, readiness, and beta user feedback.",
       },
-      {
-        href: "/demo",
-        label: "Demo Mode",
-        description: "Run the complete DevPilot incident story.",
-      },
     ],
   },
 ];

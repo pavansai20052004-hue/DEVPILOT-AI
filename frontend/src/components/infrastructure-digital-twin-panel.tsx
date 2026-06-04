@@ -778,7 +778,7 @@ export function InfrastructureDigitalTwinPanel() {
   const clusterLabel =
     source === "live"
       ? (clusterStatus?.context ?? "current-context")
-      : "devpilot-demo";
+      : "sample-cluster";
   const events = [
     {
       id: `phase-${phase}-${tick}`,

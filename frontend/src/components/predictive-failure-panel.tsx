@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   TrendingUp,
 } from "lucide-react";
-import { subscribeToDemoRuns } from "@/lib/demo-mode";
 import { API_BASE_URL, getApiErrorMessage } from "@/lib/api-client";
 
 type RiskLevel = "low" | "medium" | "high" | "critical";
@@ -132,17 +131,6 @@ export function PredictiveFailurePanel() {
       window.clearTimeout(timeout);
     };
   }, [runPrediction]);
-
-  useEffect(
-    () =>
-      subscribeToDemoRuns((payload) => {
-        setCurrentLogs(payload.sample_logs);
-        window.setTimeout(() => {
-          void runPrediction(payload.sample_logs);
-        }, 600);
-      }),
-    [runPrediction],
-  );
 
   const visiblePatterns = useMemo(
     () => prediction?.anomaly_patterns.slice(0, 4) ?? [],

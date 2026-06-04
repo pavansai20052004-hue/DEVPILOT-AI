@@ -185,7 +185,7 @@ export function SecurityAnalysisPanel() {
         generated_at: new Date().toISOString(),
       });
       setUsingDemoData(true);
-      setError("Using demo security findings until the security analysis API is reachable.");
+      setError("Using baseline security findings until the security analysis API is reachable.");
     } finally {
       setIsLoading(false);
     }
@@ -296,7 +296,7 @@ export function SecurityAnalysisPanel() {
             {isLoading
               ? "Scanning configs"
               : usingDemoData
-                ? "Demo report"
+                ? "Baseline report"
                 : `Updated ${generatedAt}`}
           </span>
         </div>

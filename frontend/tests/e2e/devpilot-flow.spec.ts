@@ -41,7 +41,6 @@ const appRoutes = [
   { href: "/cost", label: "Cloud Cost" },
   { href: "/plugins", label: "Plugins" },
   { href: "/monitoring", label: "Production Monitoring" },
-  { href: "/demo", label: "Demo Mode" },
 ];
 
 test.describe.configure({ timeout: liveRun ? 420_000 : 120_000 });

@@ -24,7 +24,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { useRole } from "@/components/role-provider";
-import { subscribeToDemoRuns } from "@/lib/demo-mode";
 import { devPilotRoleHeaders } from "@/lib/rbac";
 import { API_BASE_URL } from "@/lib/api-client";
 
@@ -351,15 +350,8 @@ export function AutonomousAgentPanel() {
     const statusInterval = window.setInterval(() => {
       void loadStatus();
     }, 5_000);
-    const unsubscribeDemoRuns = subscribeToDemoRuns(() => {
-      window.setTimeout(() => {
-        void loadStatus();
-      }, 600);
-    });
-
     return () => {
       window.clearInterval(statusInterval);
-      unsubscribeDemoRuns();
     };
   }, [loadStatus]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 import {
   BrainCircuit,
   CheckCircle2,
@@ -12,7 +12,6 @@ import {
 import { useRole } from "@/components/role-provider";
 import { RetryNotice } from "@/components/retry-notice";
 import { apiRequest } from "@/lib/api-client";
-import { subscribeToDemoRuns } from "@/lib/demo-mode";
 import { devPilotRoleHeaders } from "@/lib/rbac";
 
 type UploadResult = {
@@ -53,21 +52,6 @@ export function LogUploadPanel() {
     };
   }, [logs]);
   const canUploadLogs = can("upload_logs");
-
-  useEffect(
-    () =>
-      subscribeToDemoRuns((payload) => {
-        setLogs(payload.sample_logs);
-        setFileName(payload.log_upload.filename ?? "devpilot-demo-failures.txt");
-        setResult(payload.log_upload);
-        setAnalysis(payload.analysis);
-        setError(null);
-        setLastFailedAction(null);
-        setIsSubmitting(false);
-        setIsAnalyzing(false);
-      }),
-    [],
-  );
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

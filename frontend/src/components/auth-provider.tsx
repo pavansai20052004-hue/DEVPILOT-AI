@@ -671,7 +671,7 @@ function AuthForm({
               </h1>
               <p className="mt-4 max-w-lg text-base leading-7 text-zinc-400">
                 Separate accounts, team workspaces, CSRF-protected sessions, and
-                production SMTP resets for judges, teams, and real buyers.
+                production SMTP resets for teams and real buyers.
               </p>
             </div>
 

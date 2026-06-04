@@ -28,8 +28,6 @@ import {
   Wrench,
 } from "lucide-react";
 import { AuthStatusButton } from "@/components/auth-provider";
-import { DemoRunButton } from "@/components/demo-mode-panel";
-import { JudgeModeButton } from "@/components/judge-mode-panel";
 import { RoleSwitcher } from "@/components/role-provider";
 import { TeamSwitcher } from "@/components/team-provider";
 import { flatNavigation, navigationGroups } from "@/lib/navigation";
@@ -53,7 +51,6 @@ const navIcons: Record<string, typeof Activity> = {
   "/cost": DollarSign,
   "/plugins": Puzzle,
   "/monitoring": RadioTower,
-  "/demo": Activity,
   "/account": Building2,
 };
 
@@ -262,8 +259,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
-              <JudgeModeButton variant="header" />
-              <DemoRunButton variant="header" />
               <TeamSwitcher />
               <RoleSwitcher variant="compact" />
               <AuthStatusButton />

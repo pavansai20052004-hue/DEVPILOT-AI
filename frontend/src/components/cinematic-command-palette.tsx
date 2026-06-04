@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, Command, Play, X, Zap } from "lucide-react";
+import { Activity, Command, RadioTower, X, Zap } from "lucide-react";
 
 export function CommandPalette({
   open,
@@ -13,7 +13,7 @@ export function CommandPalette({
 }) {
   const commands = [
     { label: "Open incident dashboard", href: "/dashboard", icon: Activity },
-    { label: "Run demo mode", href: "/demo", icon: Play },
+    { label: "Open production monitoring", href: "/monitoring", icon: RadioTower },
     { label: "Inspect auto-heal engine", href: "/auto-heal", icon: Zap },
     { label: "Review command center", href: "/enterprise", icon: Command },
   ];

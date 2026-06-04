@@ -26,7 +26,6 @@ flowchart LR
 ![Hero preview](frontend/public/devpilot-hero.png)
 ![Home screen](docs/screenshots/home.png)
 ![Dashboard](docs/screenshots/dashboard.png)
-![Demo mode](docs/screenshots/demo.png)
 
 ## Setup
 
@@ -113,7 +112,7 @@ npm run test:e2e
 - GitHub Actions CI is defined in `.github/workflows/ci.yml`. It runs backend contract tests, dependency health checks, frontend lint, production build, Playwright E2E, and a high-severity npm audit gate on pull requests and pushes to `main`.
 - Scheduled production smoke checks are defined in `.github/workflows/production-smoke.yml`. They verify the live Vercel frontend routes, Render `/health` and `/ready`, and public auth/SSO configuration endpoints every six hours.
 - The authenticated app includes `Production Monitoring` at `/monitoring`. It shows API uptime, storage mode, frontend/backend URLs, SMTP, SSO, OpenAI, GitHub, Slack, CI/CD, and database readiness.
-- The monitoring page also captures beta user feedback into the backend database, giving DevPilot a real pilot-user pipeline instead of a static demo form.
+- The monitoring page also captures beta user feedback into the backend database, giving DevPilot a real pilot-user pipeline instead of a static interest form.
 - The public landing page includes a pilot access form backed by `/pilot/leads`, so real buyer interest can be captured before a visitor creates an account.
 
 Docker:
@@ -135,13 +134,14 @@ Nginx expects TLS files at `nginx/certs/fullchain.pem` and
 `nginx/certs/privkey.pem`. The HTTP listener serves ACME challenge files from
 `nginx/certbot/` and redirects app traffic to HTTPS.
 
-## Demo Flow
+## Production Workflow
 
 1. Open the landing page.
-2. Click `Run Demo`.
-3. Review seeded Kubernetes failures, CI failures, and incident memory.
-4. Open the dashboard to inspect remediation, usage, and recovery panels.
-5. Ask the voice assistant: `Why did deployment fail?`
+2. Request pilot access or create the first owner workspace.
+3. Configure the production backend secrets for database, email, SSO, OpenAI, GitHub, Slack, and Kubernetes as needed.
+4. Open `Production Monitoring` to verify frontend, backend, database, CI/CD, SMTP, SSO, and integration readiness.
+5. Upload logs, review AI diagnosis, generate a remediation pull request, and run approved recovery actions from the control plane.
+6. Ask the voice assistant: `Why did deployment fail?`
 
 ## Deployment
 

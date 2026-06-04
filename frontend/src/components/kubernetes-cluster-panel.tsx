@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import {
   AlertCircle,
   Boxes,
@@ -12,7 +12,6 @@ import {
   Undo2,
 } from "lucide-react";
 import { useRole } from "@/components/role-provider";
-import { subscribeToDemoRuns } from "@/lib/demo-mode";
 import { devPilotRoleHeaders } from "@/lib/rbac";
 import { API_BASE_URL, getApiErrorMessage } from "@/lib/api-client";
 
@@ -161,7 +160,7 @@ export function KubernetesClusterPanel() {
   const [usingDemoCluster, setUsingDemoCluster] = useState(false);
   const canRecoverCluster = can("recover_cluster");
 
-  function loadDemoCluster(message = "Demo cluster loaded.") {
+  function loadDemoCluster(message = "Sample cluster loaded.") {
     const demoStatus = buildDemoClusterStatus();
     setClusterStatus({
       ...demoStatus,
@@ -173,22 +172,6 @@ export function KubernetesClusterPanel() {
     setNotice(message);
     setUsingDemoCluster(true);
   }
-
-  useEffect(
-    () =>
-      subscribeToDemoRuns((payload) => {
-        setKubeconfigPath("");
-        setContext(payload.cluster_status.context ?? "devpilot-demo");
-        setClusterStatus(payload.cluster_status);
-        setActionResult(null);
-        setError(null);
-        setNotice("Demo run cluster status is loaded.");
-        setUsingDemoCluster(true);
-        setIsLoadingStatus(false);
-        setPendingAction(null);
-      }),
-    [],
-  );
 
   const sortedPods = useMemo(() => {
     if (!clusterStatus) {
@@ -243,7 +226,7 @@ export function KubernetesClusterPanel() {
 
       if (!connectionPayload.kubeconfig_path && /kubeconfig/i.test(message)) {
         loadDemoCluster(
-          "No live kubeconfig is configured, so DevPilot is showing a safe demo cluster. Set KUBECONFIG_B64 or KUBECONFIG_CONTENT in Render for production, or add a kubeconfig path for local checks.",
+          "No live kubeconfig is configured, so DevPilot is showing a safe sample cluster. Set KUBECONFIG_B64 or KUBECONFIG_CONTENT in Render for production, or add a kubeconfig path for local checks.",
         );
       } else {
         setError(message);
@@ -312,8 +295,8 @@ export function KubernetesClusterPanel() {
         setActionResult({
           message:
             endpoint === "restart-pod"
-              ? `Demo restart completed for ${pod.namespace}/${pod.name}.`
-              : `Demo rollback completed for ${pod.namespace}/${pod.deployment_name}.`,
+              ? `Sample restart completed for ${pod.namespace}/${pod.name}.`
+              : `Sample rollback completed for ${pod.namespace}/${pod.deployment_name}.`,
           namespace: pod.namespace,
           pod_name: endpoint === "restart-pod" ? pod.name : null,
           deployment_name:
@@ -324,7 +307,7 @@ export function KubernetesClusterPanel() {
               : "rollback_deployment",
           completed_at: new Date().toISOString(),
         });
-        setNotice("Demo recovery action completed locally. Live mode uses the Render kubeconfig secret or your supplied path.");
+        setNotice("Sample recovery action completed locally. Live mode uses the Render kubeconfig secret or your supplied path.");
         setPendingAction(null);
       }, 550);
       return;
@@ -460,7 +443,7 @@ export function KubernetesClusterPanel() {
                 className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 px-5 text-sm font-semibold text-zinc-100 transition hover:border-sky-300/40 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Boxes className="size-4" aria-hidden="true" />
-                Load Demo Cluster
+                Load Sample Cluster
               </button>
             </div>
           </form>

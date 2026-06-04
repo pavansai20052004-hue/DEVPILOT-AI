@@ -5,7 +5,6 @@ import {
   Activity,
   AlertCircle,
   BarChart3,
-  CheckCircle2,
   Clock3,
   Download,
   FileText,
@@ -18,7 +17,6 @@ import {
 } from "lucide-react";
 import { RetryNotice } from "@/components/retry-notice";
 import { API_BASE_URL, apiRequest } from "@/lib/api-client";
-import { JudgeModeResult, readJudgeModeResult } from "@/lib/demo-mode";
 
 type IncidentMemoryRecord = {
   id: string;
@@ -282,10 +280,6 @@ function formatDuration(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = Math.round(minutes % 60);
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-}
-
-function formatElapsedMs(value: number) {
-  return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}s`;
 }
 
 function formatPercent(value: number) {
@@ -696,71 +690,6 @@ function BusinessImpactMetric({
   );
 }
 
-function JudgeModeResultBanner({ result }: { result: JudgeModeResult }) {
-  const steps = [
-    "Sample failure loaded",
-    "Diagnosis completed",
-    "Fix generated",
-    "Auto-heal completed",
-    "Dashboard result shown",
-  ];
-
-  return (
-    <section className="mt-5 rounded-lg border border-cyan-300/25 bg-cyan-300/10 p-5 shadow-2xl shadow-black/20">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <div className="max-w-3xl">
-          <div className="flex items-center gap-3">
-            <div className="grid size-10 shrink-0 place-items-center rounded-md border border-cyan-300/30 bg-cyan-300/10 text-cyan-100">
-              <CheckCircle2 className="size-5" aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold uppercase text-cyan-200">
-                Judge Mode Complete
-              </p>
-              <h2 className="mt-1 text-xl font-semibold text-white">
-                Full demo completed in {formatElapsedMs(result.elapsed_ms)}
-              </h2>
-            </div>
-          </div>
-          <p className="mt-4 text-sm leading-6 text-zinc-300">
-            {result.incident}
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-lime-300/25 bg-lime-300/10 px-4 py-3 text-sm text-lime-50">
-          {result.incident_records_created} memory records /{" "}
-          {result.recovery_actions} recovery actions
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 lg:grid-cols-[1fr_1fr]">
-        <div className="rounded-lg border border-white/10 bg-[#07090b] p-4">
-          <p className="text-xs font-semibold uppercase text-zinc-500">
-            Fix applied
-          </p>
-          <p className="mt-2 text-sm leading-6 text-zinc-300">{result.fix}</p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-[#07090b] p-4">
-          <p className="text-xs font-semibold uppercase text-zinc-500">
-            Judge pipeline
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {steps.map((step) => (
-              <span
-                key={step}
-                className="inline-flex items-center gap-2 rounded-md border border-emerald-300/25 bg-emerald-300/10 px-2 py-1 text-xs text-emerald-100"
-              >
-                <CheckCircle2 className="size-3" aria-hidden="true" />
-                {step}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function BusinessImpactPanel({
   impact,
   usingDemoData,
@@ -787,7 +716,7 @@ function BusinessImpactPanel({
           <div className="flex flex-wrap gap-2">
             <span className="status-chip">
               <span className="status-dot" />
-              {usingDemoData ? "Demo model" : "Live impact model"}
+              {usingDemoData ? "Baseline model" : "Live impact model"}
             </span>
             <span className="status-chip">
               Protected SLA {formatPercent(impact.protectedSla)}
@@ -1218,7 +1147,7 @@ function IncidentReportPanel({
         <div>
           <p className="text-xs font-semibold uppercase text-zinc-500">Source</p>
           <p className="mt-2 text-sm leading-6 text-zinc-300">
-            {usingDemoData ? "Demo analytics" : "Live incident memory"}
+            {usingDemoData ? "Baseline analytics" : "Live incident memory"}
           </p>
           <p className="mt-1 text-xs text-zinc-500">
             {report.reportWindow} / generated {report.generatedAt}
@@ -1242,7 +1171,6 @@ export function AnalyticsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [usingDemoData, setUsingDemoData] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const [judgeResult, setJudgeResult] = useState<JudgeModeResult | null>(null);
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
@@ -1290,23 +1218,6 @@ export function AnalyticsDashboard() {
     };
   }, [loadHistory]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get("judge") === "complete") {
-      const timer = window.setTimeout(() => {
-        setJudgeResult(readJudgeModeResult());
-      }, 0);
-
-      return () => {
-        window.clearTimeout(timer);
-      };
-    }
-  }, []);
-
   const stats = useMemo(() => analyzeRecords(records), [records]);
   const businessImpact = useMemo(() => calculateBusinessImpact(stats), [stats]);
 
@@ -1330,7 +1241,7 @@ export function AnalyticsDashboard() {
 
             <div className="status-chip">
               <span className="status-dot" />
-              {isLoading ? "Loading memory" : usingDemoData ? "Demo analytics" : "Live memory"}
+              {isLoading ? "Loading memory" : usingDemoData ? "Baseline analytics" : "Live memory"}
             </div>
           </div>
 
@@ -1373,8 +1284,6 @@ export function AnalyticsDashboard() {
           />
         </div>
       ) : null}
-
-      {judgeResult ? <JudgeModeResultBanner result={judgeResult} /> : null}
 
       <BusinessImpactPanel
         impact={businessImpact}

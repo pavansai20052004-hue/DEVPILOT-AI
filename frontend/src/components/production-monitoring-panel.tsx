@@ -683,7 +683,7 @@ export function ProductionMonitoringPanel() {
             ))
           ) : (
             <div className="rounded-md border border-dashed border-white/15 bg-black/20 p-6 text-sm text-zinc-400 lg:col-span-2">
-              No beta feedback yet. Add the first sales or judge conversation signal above.
+              No beta feedback yet. Add the first sales or customer conversation signal above.
             </div>
           )}
         </div>
